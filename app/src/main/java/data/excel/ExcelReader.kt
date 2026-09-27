@@ -5,17 +5,23 @@ import android.net.Uri
 import android.util.Xml
 import com.lecturasgas.beta.data.model.MeterRecord
 import org.xmlpull.v1.XmlPullParser
+import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 object ExcelReader {
+
+    private const val ORIGINAL_FILE =
+        "excel_original.xlsx"
 
     private fun readZipEntry(
         zip: ZipFile,
         path: String
     ): ByteArray {
-
         val entry =
             zip.getEntry(path)
                 ?: throw IllegalStateException(
@@ -30,7 +36,6 @@ object ExcelReader {
     private fun loadSharedStrings(
         bytes: ByteArray
     ): List<String> {
-
         val parser =
             Xml.newPullParser()
 
@@ -48,12 +53,10 @@ object ExcelReader {
         while (
             event != XmlPullParser.END_DOCUMENT
         ) {
-
             if (
                 event == XmlPullParser.START_TAG &&
                 parser.name == "si"
             ) {
-
                 result.add(
                     readSharedString(parser)
                 )
@@ -69,7 +72,6 @@ object ExcelReader {
     private fun readSharedString(
         parser: XmlPullParser
     ): String {
-
         val stringDepth =
             parser.depth
 
@@ -84,12 +86,10 @@ object ExcelReader {
                     parser.depth == stringDepth &&
                     parser.name == "si")
         ) {
-
             if (
                 event == XmlPullParser.START_TAG &&
                 parser.name == "t"
             ) {
-
                 result.append(
                     parser.nextText()
                 )
@@ -105,7 +105,6 @@ object ExcelReader {
     private fun getColumnName(
         cellReference: String
     ): String {
-
         return cellReference.takeWhile {
             it.isLetter()
         }
@@ -114,7 +113,6 @@ object ExcelReader {
     private fun normalizeMeter(
         value: String
     ): String {
-
         return value
             .trim()
             .removeSuffix(".0")
@@ -124,7 +122,6 @@ object ExcelReader {
     private fun parseLongValue(
         value: String
     ): Long? {
-
         val cleaned =
             value.trim()
 
@@ -143,7 +140,6 @@ object ExcelReader {
         bytes: ByteArray,
         sharedStrings: List<String>
     ): List<MeterRecord> {
-
         val parser =
             Xml.newPullParser()
 
@@ -161,12 +157,10 @@ object ExcelReader {
         while (
             event != XmlPullParser.END_DOCUMENT
         ) {
-
             if (
                 event == XmlPullParser.START_TAG &&
                 parser.name == "row"
             ) {
-
                 val rowNumber =
                     parser
                         .getAttributeValue(
@@ -190,12 +184,10 @@ object ExcelReader {
                             parser.depth == rowDepth &&
                             parser.name == "row")
                 ) {
-
                     if (
                         event == XmlPullParser.START_TAG &&
                         parser.name == "c"
                     ) {
-
                         val cellReference =
                             parser.getAttributeValue(
                                 null,
@@ -222,12 +214,10 @@ object ExcelReader {
                                     parser.depth == cellDepth &&
                                     parser.name == "c")
                         ) {
-
                             if (
                                 innerEvent == XmlPullParser.START_TAG &&
                                 parser.name == "v"
                             ) {
-
                                 value =
                                     parser.nextText()
                             }
@@ -240,14 +230,12 @@ object ExcelReader {
                             cellType == "s" &&
                             value.isNotBlank()
                         ) {
-
                             val sharedIndex =
                                 value.toIntOrNull()
 
                             if (
                                 sharedIndex != null
                             ) {
-
                                 value =
                                     sharedStrings
                                         .getOrNull(
@@ -285,10 +273,8 @@ object ExcelReader {
                         .orEmpty()
                         .isNotBlank()
                 ) {
-
                     records.add(
                         MeterRecord(
-
                             rowNumber =
                                 rowNumber,
 
@@ -345,7 +331,6 @@ object ExcelReader {
         context: Context,
         uri: Uri
     ): List<MeterRecord> {
-
         val temporaryFile =
             File.createTempFile(
                 "lecturas_import_",
@@ -354,7 +339,6 @@ object ExcelReader {
             )
 
         try {
-
             context.contentResolver
                 .openInputStream(uri)
                 .use { input ->
@@ -366,10 +350,7 @@ object ExcelReader {
                     temporaryFile
                         .outputStream()
                         .use { output ->
-
-                            input.copyTo(
-                                output
-                            )
+                            input.copyTo(output)
                         }
                 }
 
@@ -383,16 +364,13 @@ object ExcelReader {
                             "xl/sharedStrings.xml"
                         ) != null
                     ) {
-
                         loadSharedStrings(
                             readZipEntry(
                                 zip,
                                 "xl/sharedStrings.xml"
                             )
                         )
-
                     } else {
-
                         emptyList()
                     }
 
@@ -407,10 +385,240 @@ object ExcelReader {
                     sharedStrings
                 )
             }
-
         } finally {
-
             temporaryFile.delete()
         }
+    }
+
+    fun copyOriginal(
+        context: Context,
+        uri: Uri
+    ) {
+        context.contentResolver
+            .openInputStream(uri)
+            .use { input ->
+
+                requireNotNull(input) {
+                    "No se pudo abrir el Excel original."
+                }
+
+                File(
+                    context.filesDir,
+                    ORIGINAL_FILE
+                ).outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+    }
+
+    fun export(
+        context: Context,
+        records: List<MeterRecord>,
+        destination: Uri
+    ) {
+        val original =
+            File(
+                context.filesDir,
+                ORIGINAL_FILE
+            )
+
+        require(original.exists()) {
+            "Primero debes importar un Excel."
+        }
+
+        val updates =
+            records
+                .filter {
+                    it.currentReading != null
+                }
+                .associate {
+                    it.rowNumber to
+                            it.currentReading!!
+                }
+
+        ZipFile(original).use { zip ->
+
+            context.contentResolver
+                .openOutputStream(destination)
+                .use { output ->
+
+                    requireNotNull(output) {
+                        "No se pudo crear el archivo."
+                    }
+
+                    ZipOutputStream(
+                        BufferedOutputStream(output)
+                    ).use { zout ->
+
+                        val entries =
+                            zip.entries()
+
+                        while (
+                            entries.hasMoreElements()
+                        ) {
+                            val entry =
+                                entries.nextElement()
+
+                            val newEntry =
+                                ZipEntry(
+                                    entry.name
+                                ).apply {
+                                    time =
+                                        entry.time
+                                }
+
+                            zout.putNextEntry(
+                                newEntry
+                            )
+
+                            val data =
+                                zip.getInputStream(
+                                    entry
+                                ).use {
+                                    it.readBytes()
+                                }
+
+                            val outputData =
+                                if (
+                                    entry.name ==
+                                    "xl/worksheets/sheet1.xml"
+                                ) {
+                                    updateSheetXml(
+                                        data,
+                                        updates
+                                    )
+                                } else {
+                                    data
+                                }
+
+                            zout.write(
+                                outputData
+                            )
+
+                            zout.closeEntry()
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun updateSheetXml(
+        bytes: ByteArray,
+        updates: Map<Int, Long>
+    ): ByteArray {
+
+        var xml =
+            bytes.toString(
+                StandardCharsets.UTF_8
+            )
+
+        for (
+        (row, reading) in updates
+        ) {
+            val rowRegex =
+                Regex(
+                    """(<row\b[^>]*\br="$row"[^>]*>)(.*?)(</row>)""",
+                    RegexOption.DOT_MATCHES_ALL
+                )
+
+            xml =
+                rowRegex.replace(
+                    xml
+                ) { match ->
+
+                    val body =
+                        match.groupValues[2]
+
+                    /*
+                     * Busca la celda D$row tanto si está
+                     * escrita como:
+                     *
+                     * <c ...></c>
+                     *
+                     * como si está autocerrada:
+                     *
+                     * <c .../>
+                     */
+                    val cellRegex =
+                        Regex(
+                            """<c\b[^>]*\br="D$row"[^>]*(?:/>|>.*?</c>)""",
+                            RegexOption.DOT_MATCHES_ALL
+                        )
+
+                    val newBody =
+                        if (
+                            cellRegex.containsMatchIn(
+                                body
+                            )
+                        ) {
+                            cellRegex.replace(
+                                body
+                            ) { oldCell ->
+
+                                val openingTag =
+                                    Regex(
+                                        """<c\b[^>]*>"""
+                                    )
+                                        .find(
+                                            oldCell.value
+                                        )
+                                        ?.value
+                                        ?: """<c r="D$row">"""
+
+                                val normalizedOpeningTag =
+                                    openingTag
+                                        .removeSuffix(">")
+                                        .removeSuffix("/")
+                                        .plus(">")
+
+                                normalizedOpeningTag +
+                                        "<v>$reading</v></c>"
+                            }
+                        } else {
+
+                            /*
+                             * Si D$row no existe, intentamos
+                             * insertar la celda después de C$row.
+                             *
+                             * También aceptamos C$row
+                             * autocerrada.
+                             */
+                            val cCell =
+                                Regex(
+                                    """<c\b[^>]*\br="C$row"[^>]*(?:/>|>.*?</c>)""",
+                                    RegexOption.DOT_MATCHES_ALL
+                                )
+                                    .find(body)
+
+                            val newCell =
+                                """<c r="D$row"><v>$reading</v></c>"""
+
+                            if (cCell != null) {
+                                val insertAt =
+                                    cCell.range.last + 1
+
+                                body.substring(
+                                    0,
+                                    insertAt
+                                ) +
+                                        newCell +
+                                        body.substring(
+                                            insertAt
+                                        )
+                            } else {
+                                body +
+                                        newCell
+                            }
+                        }
+
+                    match.groupValues[1] +
+                            newBody +
+                            match.groupValues[3]
+                }
+        }
+
+        return xml.toByteArray(
+            StandardCharsets.UTF_8
+        )
     }
 }
