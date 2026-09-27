@@ -1,0 +1,36 @@
+﻿# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Generated files
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android generated artifacts
+*.apk
+*.aab
+
+# Signing / secrets
+*.jks
+*.keystore
+keystore.properties
+
+# Temporary files
+*.tmp
+*.log
+
+# Real Excel files / personal or company data
+*.xlsx
+*.xls
+*.xlsm
