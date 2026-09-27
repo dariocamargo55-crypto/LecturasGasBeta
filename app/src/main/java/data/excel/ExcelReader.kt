@@ -1,7 +1,9 @@
 package com.lecturasgas.beta.data.excel
 
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Xml
 import com.lecturasgas.beta.data.model.MeterRecord
 import org.xmlpull.v1.XmlPullParser
@@ -9,6 +11,7 @@ import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -134,6 +137,106 @@ object ExcelReader {
                 cleaned
             ).toLong()
         }.getOrNull()
+    }
+
+    /*
+     * Obtiene el nombre del archivo Excel seleccionado
+     * y lo convierte en el nombre visible de la ruta.
+     *
+     * Ejemplo:
+     *
+     * ruta A septiembre.xlsx
+     *
+     * se convierte en:
+     *
+     * RUTA A — SEPTIEMBRE
+     */
+    fun getRouteName(
+        context: Context,
+        uri: Uri
+    ): String? {
+
+        var fileName: String? = null
+
+        val cursor: Cursor? =
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    OpenableColumns.DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )
+
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val columnIndex =
+                    it.getColumnIndex(
+                        OpenableColumns.DISPLAY_NAME
+                    )
+
+                if (columnIndex >= 0) {
+                    fileName =
+                        it.getString(
+                            columnIndex
+                        )
+                }
+            }
+        }
+
+        if (fileName.isNullOrBlank()) {
+            fileName =
+                uri.lastPathSegment
+        }
+
+        if (fileName.isNullOrBlank()) {
+            return null
+        }
+
+        var cleanName =
+            fileName
+                .trim()
+                .replace(
+                    Regex("""\.[^.]+$"""),
+                    ""
+                )
+                .replace(
+                    Regex("""\s+"""),
+                    " "
+                )
+                .trim()
+
+        if (cleanName.isBlank()) {
+            return null
+        }
+
+        cleanName =
+            cleanName.uppercase(
+                Locale.ROOT
+            )
+
+        val routePattern =
+            Regex(
+                """^RUTA\s+([A-Z0-9]+)\s+(.+)$"""
+            )
+
+        val match =
+            routePattern.matchEntire(
+                cleanName
+            )
+
+        return if (match != null) {
+            val route =
+                "RUTA ${match.groupValues[1]}"
+
+            val period =
+                match.groupValues[2].trim()
+
+            "$route — $period"
+        } else {
+            cleanName
+        }
     }
 
     private fun readSheet(
