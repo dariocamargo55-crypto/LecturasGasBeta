@@ -116,10 +116,29 @@ object ExcelReader {
     private fun normalizeMeter(
         value: String
     ): String {
-        return value
-            .trim()
-            .removeSuffix(".0")
-            .trim()
+        val cleaned =
+            value.trim()
+
+        if (cleaned.isBlank()) {
+            return ""
+        }
+
+        return runCatching {
+            if (
+                cleaned.contains(
+                    "E",
+                    ignoreCase = true
+                )
+            ) {
+                java.math.BigDecimal(
+                    cleaned
+                ).toPlainString()
+            } else {
+                cleaned.removeSuffix(".0")
+            }
+        }.getOrElse {
+            cleaned
+        }.trim()
     }
 
     private fun parseLongValue(

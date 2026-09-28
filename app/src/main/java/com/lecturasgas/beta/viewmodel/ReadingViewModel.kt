@@ -520,8 +520,9 @@ class ReadingViewModel(
             gpsPointSaved = true
         }
 
+        search = ""
         rebuildSearchData()
-        applySearchImmediately(search)
+        applySearchImmediately("")
         persist()
 
         message =

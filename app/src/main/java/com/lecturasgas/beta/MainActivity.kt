@@ -1,3 +1,4 @@
+
 package com.lecturasgas.beta
 
 import android.Manifest
@@ -101,10 +102,6 @@ fun App(
     }
 
     var menuExpanded by remember {
-        mutableStateOf(false)
-    }
-
-    var keyboardMenuExpanded by remember {
         mutableStateOf(false)
     }
 
@@ -844,108 +841,52 @@ fun App(
 
                                 trailingIcon = {
 
-                                    Box(
-                                        contentAlignment =
-                                            Alignment.Center
+                                    Surface(
+                                        modifier =
+                                            Modifier
+                                                .padding(
+                                                    end = 6.dp
+                                                )
+                                                .clickable {
+                                                    vm.updateNumericKeyboard(
+                                                        !vm.numericKeyboard
+                                                    )
+                                                },
+                                        shape =
+                                            RoundedCornerShape(
+                                                10.dp
+                                            ),
+                                        color =
+                                            MaterialTheme
+                                                .colorScheme
+                                                .surfaceVariant
                                     ) {
 
-                                        Surface(
+                                        Text(
+
+                                            text =
+                                                if (
+                                                    vm.numericKeyboard
+                                                ) {
+                                                    "123"
+                                                } else {
+                                                    "ABC"
+                                                },
+
                                             modifier =
-                                                Modifier
-                                                    .padding(
-                                                        end = 6.dp
-                                                    )
-                                                    .clickable {
-                                                        keyboardMenuExpanded =
-                                                            true
-                                                    },
-                                            shape =
-                                                RoundedCornerShape(
-                                                    10.dp
+                                                Modifier.padding(
+                                                    horizontal = 9.dp,
+                                                    vertical = 5.dp
                                                 ),
-                                            color =
+
+                                            style =
                                                 MaterialTheme
-                                                    .colorScheme
-                                                    .surfaceVariant
-                                        ) {
+                                                    .typography
+                                                    .labelLarge,
 
-                                            Text(
-
-                                                text =
-                                                    if (
-                                                        vm.numericKeyboard
-                                                    ) {
-                                                        "123"
-                                                    } else {
-                                                        "ABC"
-                                                    },
-
-                                                modifier =
-                                                    Modifier.padding(
-                                                        horizontal = 9.dp,
-                                                        vertical = 5.dp
-                                                    ),
-
-                                                style =
-                                                    MaterialTheme
-                                                        .typography
-                                                        .labelLarge,
-
-                                                fontWeight =
-                                                    FontWeight.SemiBold
-                                            )
-                                        }
-
-                                        DropdownMenu(
-
-                                            expanded =
-                                                keyboardMenuExpanded,
-
-                                            onDismissRequest = {
-                                                keyboardMenuExpanded =
-                                                    false
-                                            }
-
-                                        ) {
-
-                                            DropdownMenuItem(
-
-                                                text = {
-                                                    Text(
-                                                        "123  Teclado numérico"
-                                                    )
-                                                },
-
-                                                onClick = {
-
-                                                    vm.updateNumericKeyboard(
-                                                        true
-                                                    )
-
-                                                    keyboardMenuExpanded =
-                                                        false
-                                                }
-                                            )
-
-                                            DropdownMenuItem(
-
-                                                text = {
-                                                    Text(
-                                                        "ABC  Teclado normal"
-                                                    )
-                                                },
-
-                                                onClick = {
-
-                                                    vm.updateNumericKeyboard(
-                                                        false
-                                                    )
-
-                                                    keyboardMenuExpanded =
-                                                        false
-                                                }
-                                            )
-                                        }
+                                            fontWeight =
+                                                FontWeight.SemiBold
+                                        )
                                     }
                                 },
 
