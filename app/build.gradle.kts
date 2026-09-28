@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
 android {
     namespace = "com.lecturasgas.beta"
     compileSdk = 35
@@ -11,6 +12,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     defaultConfig {
         applicationId = "com.lecturasgas.beta"
         minSdk = 26
@@ -18,7 +20,10 @@ android {
         versionCode = 1
         versionName = "0.1.0-beta"
     }
-    buildFeatures { compose = true }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 kotlin {
@@ -33,5 +38,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+
+    implementation("org.maplibre.gl:android-sdk:11.11.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

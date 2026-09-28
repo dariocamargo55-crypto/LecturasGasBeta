@@ -1,3 +1,4 @@
+
 package com.lecturasgas.beta.viewmodel
 
 import android.app.Application
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 import com.lecturasgas.beta.data.excel.ExcelReader
 import com.lecturasgas.beta.data.model.MeterRecord
 import com.lecturasgas.beta.data.model.RouteSegment
+import com.lecturasgas.beta.data.model.RoutePoint
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -90,6 +92,20 @@ class ReadingViewModel(
     private var searchJob: Job? = null
 
     private var searchIndex: List<SearchEntry> = emptyList()
+
+    var routeRecordingActive by
+    mutableStateOf(
+        prefs.getBoolean("route_gps_active", false)
+    )
+        private set
+
+    var routePoints by
+    mutableStateOf<List<RoutePoint>>(emptyList())
+        private set
+
+    private var currentLatitude: Double? = null
+    private var currentLongitude: Double? = null
+    private var currentAccuracyMeters: Float? = null
 
     var filtered by
     mutableStateOf<List<MeterRecord>>(emptyList())
@@ -195,6 +211,8 @@ class ReadingViewModel(
 
         routeName =
             savedRouteName
+
+        routePoints = loadRoutePoints()
 
         val json =
             prefs.getString(
@@ -304,6 +322,14 @@ class ReadingViewModel(
                 "search_query",
                 search
             )
+            .putBoolean(
+                "route_gps_active",
+                routeRecordingActive
+            )
+            .putString(
+                "route_gps_points",
+                serializeRoutePoints(routePoints)
+            )
             .apply()
     }
 
@@ -359,9 +385,14 @@ class ReadingViewModel(
 
             search = ""
             lastExpandedSegmentId = null
+            routeRecordingActive = false
+            currentLatitude = null
+            currentLongitude = null
+            currentAccuracyMeters = null
 
             prefs.edit()
                 .remove("last_expanded_segment_id")
+                .putBoolean("route_gps_active", false)
                 .apply()
 
             persist()
@@ -444,12 +475,63 @@ class ReadingViewModel(
                 }
             }
 
+        val updatedRecord =
+            records.firstOrNull {
+                it.rowNumber == rowNumber
+            }
+
+        var gpsPointSaved = false
+
+        if (
+            routeRecordingActive &&
+            updatedRecord != null &&
+            currentLatitude != null &&
+            currentLongitude != null
+        ) {
+            val point =
+                RoutePoint(
+                    recordRowNumber = updatedRecord.rowNumber,
+                    nir = updatedRecord.nir,
+                    meter = updatedRecord.meter,
+                    user = updatedRecord.user,
+                    address = updatedRecord.address,
+                    neighborhood = updatedRecord.neighborhood,
+                    reading = value,
+                    latitude = currentLatitude!!,
+                    longitude = currentLongitude!!,
+                    accuracyMeters = currentAccuracyMeters,
+                    timestamp = System.currentTimeMillis()
+                )
+
+            val pointIndex =
+                routePoints.indexOfFirst {
+                    it.recordRowNumber == rowNumber
+                }
+
+            routePoints =
+                if (pointIndex >= 0) {
+                    routePoints.toMutableList().apply {
+                        this[pointIndex] = point
+                    }
+                } else {
+                    routePoints + point
+                }
+
+            gpsPointSaved = true
+        }
+
         rebuildSearchData()
         applySearchImmediately(search)
         persist()
 
         message =
-            "Lectura registrada: $value"
+            if (gpsPointSaved) {
+                "Lectura registrada y posición GPS guardada."
+            } else if (routeRecordingActive) {
+                "Lectura registrada. GPS aún no disponible."
+            } else {
+                "Lectura registrada: $value"
+            }
 
         return true
     }
@@ -489,6 +571,36 @@ class ReadingViewModel(
             isBusy = false
         }
     }
+
+    fun startRouteRecording() {
+        if (!imported) {
+            message = "Importa una ruta antes de iniciar la grabación GPS."
+            return
+        }
+
+        routeRecordingActive = true
+        persist()
+        message = "Grabación GPS iniciada. Cada lectura guardará su posición."
+    }
+
+    fun stopRouteRecording() {
+        routeRecordingActive = false
+        persist()
+        message = "Grabación GPS detenida. Los puntos quedan guardados."
+    }
+
+    fun updateCurrentLocation(
+        latitude: Double,
+        longitude: Double,
+        accuracyMeters: Float?
+    ) {
+        currentLatitude = latitude
+        currentLongitude = longitude
+        currentAccuracyMeters = accuracyMeters
+    }
+
+    val routePointCount: Int
+        get() = routePoints.size
 
     fun updateNumericKeyboard(enabled: Boolean) {
         numericKeyboard = enabled
@@ -564,6 +676,109 @@ class ReadingViewModel(
 
     fun clearMessage() {
         message = null
+    }
+
+    fun updateRoutePointLocation(
+        rowNumber: Int,
+        latitude: Double,
+        longitude: Double
+    ) {
+        val index = routePoints.indexOfFirst {
+            it.recordRowNumber == rowNumber
+        }
+
+        if (index < 0) return
+
+        routePoints = routePoints.toMutableList().apply {
+            val point = this[index]
+            this[index] = point.copy(
+                latitude = latitude,
+                longitude = longitude
+            )
+        }
+
+        persist()
+        message = "Ubicación del punto actualizada."
+    }
+
+    fun deleteRoutePoint(
+        rowNumber: Int
+    ) {
+        val originalSize = routePoints.size
+
+        routePoints = routePoints.filterNot {
+            it.recordRowNumber == rowNumber
+        }
+
+        if (routePoints.size != originalSize) {
+            persist()
+            message = "Ubicación del punto eliminada."
+        }
+    }
+
+    private fun serializeRoutePoints(
+        points: List<RoutePoint>
+    ): String {
+        val array = JSONArray()
+
+        points.forEach { point ->
+            array.put(
+                JSONObject().apply {
+                    put("row", point.recordRowNumber)
+                    put("nir", point.nir)
+                    put("meter", point.meter)
+                    put("user", point.user)
+                    put("address", point.address)
+                    put("neighborhood", point.neighborhood)
+                    put("reading", point.reading)
+                    put("latitude", point.latitude)
+                    put("longitude", point.longitude)
+                    put(
+                        "accuracy",
+                        point.accuracyMeters?.toDouble()
+                            ?: JSONObject.NULL
+                    )
+                    put("timestamp", point.timestamp)
+                }
+            )
+        }
+
+        return array.toString()
+    }
+
+    private fun loadRoutePoints(): List<RoutePoint> {
+        val json =
+            prefs.getString(
+                "route_gps_points",
+                "[]"
+            ) ?: "[]"
+
+        return runCatching {
+            val array = JSONArray(json)
+
+            List(array.length()) { index ->
+                val obj = array.getJSONObject(index)
+
+                RoutePoint(
+                    recordRowNumber = obj.optInt("row"),
+                    nir = obj.optString("nir"),
+                    meter = obj.optString("meter"),
+                    user = obj.optString("user"),
+                    address = obj.optString("address"),
+                    neighborhood = obj.optString("neighborhood"),
+                    reading = obj.optLong("reading"),
+                    latitude = obj.optDouble("latitude"),
+                    longitude = obj.optDouble("longitude"),
+                    accuracyMeters =
+                        if (obj.isNull("accuracy")) {
+                            null
+                        } else {
+                            obj.optDouble("accuracy").toFloat()
+                        },
+                    timestamp = obj.optLong("timestamp")
+                )
+            }
+        }.getOrDefault(emptyList())
     }
 
     // -------------------------------------------------------------------------
@@ -699,12 +914,18 @@ class ReadingViewModel(
     ): Int {
         if (queryMeter.isBlank()) return 0
 
+        // Si se escriben exactamente 4 dígitos en la búsqueda de medidor,
+        // la coincidencia debe ser exclusivamente por los 4 últimos dígitos.
+        // No se aceptan coincidencias por los primeros dígitos ni por
+        // apariciones internas del número.
+        if (digits.length == 4) {
+            return if (entry.meterDigits.endsWith(digits)) 900 else 0
+        }
+
         return when {
             entry.meter == queryMeter -> 1000
             queryMeterDigits.isNotBlank() &&
                     entry.meterDigits == queryMeterDigits -> 950
-            digits.length == 4 &&
-                    entry.meterDigits.endsWith(digits) -> 900
             compact.isNotEmpty() &&
                     entry.meter.contains(compact) -> 800
             else -> 0
