@@ -1,3 +1,4 @@
+
 package com.lecturasgas.beta
 
 import android.annotation.SuppressLint
@@ -6,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Looper
+import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -36,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
@@ -104,6 +107,10 @@ fun MapScreen(
         mutableStateOf<MapLibreMap?>(null)
     }
 
+    var mapStyleReady by remember {
+        mutableStateOf(false)
+    }
+
     var locationEngine by remember {
         mutableStateOf<LocationEngine?>(null)
     }
@@ -165,11 +172,11 @@ fun MapScreen(
             onCreate(null)
 
             getMapAsync { map ->
-                mapInstance = map
-
                 map.setStyle(
                     "https://tiles.openfreemap.org/styles/liberty"
                 ) { style ->
+                    mapInstance = map
+                    mapStyleReady = true
 
                     val locationComponentOptions =
                         LocationComponentOptions
@@ -186,6 +193,20 @@ fun MapScreen(
                                 LocationEngineRequest.PRIORITY_HIGH_ACCURACY
                             )
                             .build()
+
+                    val hasLocationPermission =
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == PackageManager.PERMISSION_GRANTED ||
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                    if (!hasLocationPermission) {
+                        return@setStyle
+                    }
 
                     val locationComponentActivationOptions =
                         LocationComponentActivationOptions
@@ -317,11 +338,13 @@ fun MapScreen(
 
     LaunchedEffect(
         mapInstance,
+        mapStyleReady,
         routePoints,
         records,
         focusRecordRowNumber
     ) {
         val map = mapInstance ?: return@LaunchedEffect
+        if (!mapStyleReady) return@LaunchedEffect
 
         map.clear()
         markerRowNumbers.clear()
@@ -388,7 +411,7 @@ fun MapScreen(
                 }
             }
 
-        if (focusPoint != null) {
+        if (focusPoint != null && map.locationComponent.isLocationComponentEnabled) {
             val target =
                 LatLng(
                     focusPoint.latitude,
@@ -446,12 +469,20 @@ fun MapScreen(
 
                     setOnClickListener {
 
+                        if (!mapStyleReady) {
+                            return@setOnClickListener
+                        }
+
                         val map =
                             mapInstance
                                 ?: return@setOnClickListener
 
                         val component =
                             map.locationComponent
+
+                        if (!component.isLocationComponentEnabled) {
+                            return@setOnClickListener
+                        }
 
                         val location =
                             component.lastKnownLocation
@@ -541,10 +572,6 @@ fun MapScreen(
 
                     androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
                         mapView.onStop()
-                    }
-
-                    androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> {
-                        mapView.onDestroy()
                     }
 
                     else -> Unit
@@ -804,3 +831,4 @@ fun MapScreen(
         }
     }
 }
+

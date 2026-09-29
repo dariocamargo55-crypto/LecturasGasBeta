@@ -13,20 +13,29 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lecturasgas.beta.data.model.MeterRecord
+import com.lecturasgas.beta.viewmodel.ReadingViewModel
 
 @Composable
 fun MeterRecordCard(
     record: MeterRecord,
     duplicate: Boolean,
     onClick: () -> Unit,
-    onViewMap: () -> Unit
+    onViewMap: () -> Unit,
+    vm: ReadingViewModel = viewModel()
 ) {
     val consumption =
         if (record.currentReading != null && record.previousReading != null) {
@@ -34,6 +43,20 @@ fun MeterRecordCard(
         } else {
             null
         }
+
+    val correction = vm.getMeterCorrection(record.rowNumber)
+
+    var correctionExpanded by remember(record.rowNumber) {
+        mutableStateOf(false)
+    }
+
+    var physicalMeterText by remember(record.rowNumber, correction?.physicalMeter) {
+        mutableStateOf(correction?.physicalMeter ?: record.meter)
+    }
+
+    var noteText by remember(record.rowNumber, correction?.note) {
+        mutableStateOf(correction?.note.orEmpty())
+    }
 
     val cardColor =
         if (record.currentReading == null) {
@@ -85,12 +108,14 @@ fun MeterRecordCard(
                     )
                 } else {
                     Text(
-                        "✓ Lectura tomada: " + record.currentReading,
+                        "✓ Lectura tomada: " +
+                                record.currentReading,
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     Text(
-                        "Anterior: " + (record.previousReading ?: "—"),
+                        "Anterior: " +
+                                (record.previousReading ?: "—"),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -108,9 +133,31 @@ fun MeterRecordCard(
                     Spacer(Modifier.height(3.dp))
 
                     Text(
-                        "Observación: " + record.observation,
+                        "Observación: " +
+                                record.observation,
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
+
+                if (correction != null) {
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        "⚠ Medidor con corrección",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Text(
+                        "Excel: ${correction.excelMeter}  →  Físico: ${correction.physicalMeter}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (correction.note.isNotBlank()) {
+                        Text(
+                            "Nota: ${correction.note}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -119,20 +166,115 @@ fun MeterRecordCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Button(
-                        onClick = onViewMap
-                    ) {
+                    Button(onClick = onViewMap) {
                         Text("Ver en mapa")
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        correctionExpanded = !correctionExpanded
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (correctionExpanded) {
+                            "▲ Corrección y notas"
+                        } else {
+                            "▼ Corrección y notas"
+                        }
+                    )
+                }
+
+                if (correctionExpanded) {
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        "Medidor en Excel / base de datos",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+
+                    Text(
+                        record.meter,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = physicalMeterText,
+                        onValueChange = { physicalMeterText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Medidor físico") },
+                        singleLine = true
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Descripción / nota") },
+                        minLines = 2
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                vm.saveMeterCorrection(
+                                    rowNumber = record.rowNumber,
+                                    physicalMeter = physicalMeterText,
+                                    note = noteText
+                                )
+                                correctionExpanded = false
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Guardar cambios")
+                        }
+
+                        if (correction != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    vm.deleteMeterCorrection(record.rowNumber)
+                                    physicalMeterText = record.meter
+                                    noteText = ""
+                                    correctionExpanded = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Eliminar")
+                            }
+                        }
                     }
                 }
             }
 
-            if (consumption != null) {
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalAlignment = Alignment.End
+            ) {
                 Text(
-                    "Consumo: $consumption m³",
-                    modifier = Modifier.align(Alignment.TopEnd),
+                    "Fila ${record.rowNumber}",
                     style = MaterialTheme.typography.labelSmall
                 )
+
+                if (consumption != null) {
+                    Spacer(Modifier.height(3.dp))
+
+                    Text(
+                        "Consumo: $consumption m³",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
     }

@@ -91,6 +91,14 @@ class ReadingViewModel(
 
     private var searchJob: Job? = null
 
+    data class MeterCorrection(
+        val excelMeter: String,
+        val physicalMeter: String,
+        val note: String
+    )
+
+    private var meterCorrections by mutableStateOf<Map<Int, MeterCorrection>>(emptyMap())
+
     private var searchIndex: List<SearchEntry> = emptyList()
 
     var routeRecordingActive by
@@ -213,6 +221,7 @@ class ReadingViewModel(
             savedRouteName
 
         routePoints = loadRoutePoints()
+        meterCorrections = loadMeterCorrections()
 
         val json =
             prefs.getString(
@@ -330,6 +339,10 @@ class ReadingViewModel(
                 "route_gps_points",
                 serializeRoutePoints(routePoints)
             )
+            .putString(
+                "meter_corrections",
+                serializeMeterCorrections(meterCorrections)
+            )
             .apply()
     }
 
@@ -374,6 +387,7 @@ class ReadingViewModel(
             records =
                 parsed
 
+            meterCorrections = emptyMap()
             rebuildSearchData()
             applySearchImmediately("")
 
@@ -675,6 +689,60 @@ class ReadingViewModel(
         editor.apply()
     }
 
+    fun getMeterCorrection(rowNumber: Int): MeterCorrection? =
+        meterCorrections[rowNumber]
+
+    fun saveMeterCorrection(
+        rowNumber: Int,
+        physicalMeter: String,
+        note: String
+    ): Boolean {
+        val record = records.firstOrNull { it.rowNumber == rowNumber }
+            ?: return false
+
+        val normalizedPhysicalMeter = normalizeMeter(physicalMeter)
+        if (normalizedPhysicalMeter.isBlank() && note.isBlank()) {
+            meterCorrections = meterCorrections.toMutableMap().apply {
+                remove(rowNumber)
+            }
+            rebuildSearchData()
+            applySearchImmediately(search)
+            persist()
+            message = "Corrección eliminada."
+            return true
+        }
+
+        meterCorrections = meterCorrections.toMutableMap().apply {
+            this[rowNumber] = MeterCorrection(
+                excelMeter = normalizeMeter(record.meter),
+                physicalMeter = normalizedPhysicalMeter.ifBlank { normalizeMeter(record.meter) },
+                note = note.trim()
+            )
+        }
+
+        rebuildSearchData()
+        applySearchImmediately(search)
+        persist()
+        message = "Corrección de medidor guardada."
+        return true
+    }
+
+    fun deleteMeterCorrection(rowNumber: Int) {
+        if (!meterCorrections.containsKey(rowNumber)) return
+
+        meterCorrections = meterCorrections.toMutableMap().apply {
+            remove(rowNumber)
+        }
+
+        rebuildSearchData()
+        applySearchImmediately(search)
+        persist()
+        message = "Corrección de medidor eliminada."
+    }
+
+    fun getMeterNote(rowNumber: Int): String =
+        meterCorrections[rowNumber]?.note.orEmpty()
+
     fun clearMessage() {
         message = null
     }
@@ -747,6 +815,49 @@ class ReadingViewModel(
         return array.toString()
     }
 
+    private fun serializeMeterCorrections(
+        corrections: Map<Int, MeterCorrection>
+    ): String {
+        val array = JSONArray()
+
+        corrections.forEach { (rowNumber, correction) ->
+            array.put(
+                JSONObject().apply {
+                    put("row", rowNumber)
+                    put("excelMeter", correction.excelMeter)
+                    put("physicalMeter", correction.physicalMeter)
+                    put("note", correction.note)
+                }
+            )
+        }
+
+        return array.toString()
+    }
+
+    private fun loadMeterCorrections(): Map<Int, MeterCorrection> {
+        val json = prefs.getString("meter_corrections", "[]") ?: "[]"
+
+        return runCatching {
+            val array = JSONArray(json)
+            buildMap {
+                for (index in 0 until array.length()) {
+                    val obj = array.getJSONObject(index)
+                    val rowNumber = obj.optInt("row", -1)
+                    if (rowNumber >= 0) {
+                        put(
+                            rowNumber,
+                            MeterCorrection(
+                                excelMeter = obj.optString("excelMeter"),
+                                physicalMeter = obj.optString("physicalMeter"),
+                                note = obj.optString("note")
+                            )
+                        )
+                    }
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
+
     private fun loadRoutePoints(): List<RoutePoint> {
         val json =
             prefs.getString(
@@ -790,6 +901,8 @@ class ReadingViewModel(
         val record: MeterRecord,
         val meter: String,
         val meterDigits: String,
+        val physicalMeter: String,
+        val physicalMeterDigits: String,
         val address: String,
         val user: String,
         val neighborhood: String,
@@ -806,6 +919,14 @@ class ReadingViewModel(
                 meter = normalizeMeter(record.meter),
                 meterDigits = normalizeMeter(record.meter)
                     .filter(Char::isDigit),
+                physicalMeter = normalizeMeter(
+                    meterCorrections[record.rowNumber]?.physicalMeter
+                        ?: record.meter
+                ),
+                physicalMeterDigits = normalizeMeter(
+                    meterCorrections[record.rowNumber]?.physicalMeter
+                        ?: record.meter
+                ).filter(Char::isDigit),
                 address = normalizeText(record.address),
                 user = normalizeText(record.user),
                 neighborhood = normalizeText(record.neighborhood),
@@ -915,18 +1036,23 @@ class ReadingViewModel(
     ): Int {
         if (queryMeter.isBlank()) return 0
 
-        // Si se escriben exactamente 4 dígitos en la búsqueda de medidor,
-        // la coincidencia debe ser exclusivamente por los 4 últimos dígitos.
-        // No se aceptan coincidencias por los primeros dígitos ni por
-        // apariciones internas del número.
         if (digits.length == 4) {
-            return if (entry.meterDigits.endsWith(digits)) 900 else 0
+            return when {
+                entry.physicalMeterDigits.endsWith(digits) -> 950
+                entry.meterDigits.endsWith(digits) -> 900
+                else -> 0
+            }
         }
 
         return when {
-            entry.meter == queryMeter -> 1000
+            entry.physicalMeter == queryMeter -> 1000
+            entry.meter == queryMeter -> 980
+            queryMeterDigits.isNotBlank() &&
+                    entry.physicalMeterDigits == queryMeterDigits -> 960
             queryMeterDigits.isNotBlank() &&
                     entry.meterDigits == queryMeterDigits -> 950
+            compact.isNotEmpty() &&
+                    entry.physicalMeter.contains(compact) -> 850
             compact.isNotEmpty() &&
                     entry.meter.contains(compact) -> 800
             else -> 0
@@ -976,9 +1102,13 @@ class ReadingViewModel(
     ): Int {
         var score = 0
 
-        if (queryMeter.isNotBlank() && entry.meter == queryMeter) score = maxOf(score, 1000)
+        if (queryMeter.isNotBlank() && entry.physicalMeter == queryMeter) score = maxOf(score, 1000)
+        if (queryMeter.isNotBlank() && entry.meter == queryMeter) score = maxOf(score, 980)
+        if (queryMeterDigits.isNotBlank() && entry.physicalMeterDigits == queryMeterDigits) score = maxOf(score, 960)
         if (queryMeterDigits.isNotBlank() && entry.meterDigits == queryMeterDigits) score = maxOf(score, 950)
+        if (digits.length == 4 && entry.physicalMeterDigits.endsWith(digits)) score = maxOf(score, 910)
         if (digits.length == 4 && entry.meterDigits.endsWith(digits)) score = maxOf(score, 900)
+        if (compact.isNotEmpty() && entry.physicalMeter.contains(compact)) score = maxOf(score, 850)
         if (compact.isNotEmpty() && entry.meter.contains(compact)) score = maxOf(score, 800)
 
         if (digits.isNotBlank()) {
