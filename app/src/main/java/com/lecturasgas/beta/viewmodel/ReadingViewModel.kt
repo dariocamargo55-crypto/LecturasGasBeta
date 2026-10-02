@@ -1,4 +1,3 @@
-
 package com.lecturasgas.beta.viewmodel
 
 import android.app.Application
@@ -97,18 +96,27 @@ class ReadingViewModel(
         val note: String
     )
 
-    private var meterCorrections by mutableStateOf<Map<Int, MeterCorrection>>(emptyMap())
+    private var meterCorrections by
+    mutableStateOf<Map<Int, MeterCorrection>>(
+        emptyMap()
+    )
 
-    private var searchIndex: List<SearchEntry> = emptyList()
+    private var searchIndex: List<SearchEntry> =
+        emptyList()
 
     var routeRecordingActive by
     mutableStateOf(
-        prefs.getBoolean("route_gps_active", false)
+        prefs.getBoolean(
+            "route_gps_active",
+            false
+        )
     )
         private set
 
     var routePoints by
-    mutableStateOf<List<RoutePoint>>(emptyList())
+    mutableStateOf<List<RoutePoint>>(
+        emptyList()
+    )
         private set
 
     private var currentLatitude: Double? = null
@@ -116,20 +124,27 @@ class ReadingViewModel(
     private var currentAccuracyMeters: Float? = null
 
     var filtered by
-    mutableStateOf<List<MeterRecord>>(emptyList())
+    mutableStateOf<List<MeterRecord>>(
+        emptyList()
+    )
         private set
 
-    private var cachedRouteSegments: List<RouteSegment> = emptyList()
+    private var cachedRouteSegments:
+            List<RouteSegment> = emptyList()
 
     var visibleRouteSegments by
-    mutableStateOf<List<RouteSegment>>(emptyList())
+    mutableStateOf<List<RouteSegment>>(
+        emptyList()
+    )
         private set
 
     var lastExpandedSegmentId by
     mutableStateOf(
         if (prefs.contains("last_expanded_segment_id")) {
-            prefs.getInt("last_expanded_segment_id", -1)
-                .takeIf { it >= 0 }
+            prefs.getInt(
+                "last_expanded_segment_id",
+                -1
+            ).takeIf { it >= 0 }
         } else {
             null
         }
@@ -220,8 +235,11 @@ class ReadingViewModel(
         routeName =
             savedRouteName
 
-        routePoints = loadRoutePoints()
-        meterCorrections = loadMeterCorrections()
+        routePoints =
+            loadRoutePoints()
+
+        meterCorrections =
+            loadMeterCorrections()
 
         val json =
             prefs.getString(
@@ -341,7 +359,9 @@ class ReadingViewModel(
             )
             .putString(
                 "meter_corrections",
-                serializeMeterCorrections(meterCorrections)
+                serializeMeterCorrections(
+                    meterCorrections
+                )
             )
             .apply()
     }
@@ -387,7 +407,9 @@ class ReadingViewModel(
             records =
                 parsed
 
-            meterCorrections = emptyMap()
+            meterCorrections =
+                emptyMap()
+
             rebuildSearchData()
             applySearchImmediately("")
 
@@ -398,15 +420,30 @@ class ReadingViewModel(
                 true
 
             search = ""
-            lastExpandedSegmentId = null
-            routeRecordingActive = false
-            currentLatitude = null
-            currentLongitude = null
-            currentAccuracyMeters = null
+
+            lastExpandedSegmentId =
+                null
+
+            routeRecordingActive =
+                false
+
+            currentLatitude =
+                null
+
+            currentLongitude =
+                null
+
+            currentAccuracyMeters =
+                null
 
             prefs.edit()
-                .remove("last_expanded_segment_id")
-                .putBoolean("route_gps_active", false)
+                .remove(
+                    "last_expanded_segment_id"
+                )
+                .putBoolean(
+                    "route_gps_active",
+                    false
+                )
                 .apply()
 
             persist()
@@ -502,32 +539,61 @@ class ReadingViewModel(
             currentLatitude != null &&
             currentLongitude != null
         ) {
+
             val point =
                 RoutePoint(
-                    recordRowNumber = updatedRecord.rowNumber,
-                    nir = updatedRecord.nir,
-                    meter = updatedRecord.meter,
-                    user = updatedRecord.user,
-                    address = updatedRecord.address,
-                    neighborhood = updatedRecord.neighborhood,
-                    reading = value,
-                    latitude = currentLatitude!!,
-                    longitude = currentLongitude!!,
-                    accuracyMeters = currentAccuracyMeters,
-                    timestamp = System.currentTimeMillis()
+                    recordRowNumber =
+                        updatedRecord.rowNumber,
+
+                    nir =
+                        updatedRecord.nir,
+
+                    meter =
+                        updatedRecord.meter,
+
+                    user =
+                        updatedRecord.user,
+
+                    address =
+                        updatedRecord.address,
+
+                    neighborhood =
+                        updatedRecord.neighborhood,
+
+                    reading =
+                        value,
+
+                    latitude =
+                        currentLatitude!!,
+
+                    longitude =
+                        currentLongitude!!,
+
+                    accuracyMeters =
+                        currentAccuracyMeters,
+
+                    timestamp =
+                        System.currentTimeMillis()
                 )
 
             val pointIndex =
                 routePoints.indexOfFirst {
-                    it.recordRowNumber == rowNumber
+                    it.recordRowNumber ==
+                            rowNumber
                 }
 
             routePoints =
                 if (pointIndex >= 0) {
-                    routePoints.toMutableList().apply {
-                        this[pointIndex] = point
-                    }
+
+                    routePoints
+                        .toMutableList()
+                        .apply {
+                            this[pointIndex] =
+                                point
+                        }
+
                 } else {
+
                     routePoints + point
                 }
 
@@ -535,18 +601,119 @@ class ReadingViewModel(
         }
 
         search = ""
+
         rebuildSearchData()
+
         applySearchImmediately("")
+
         persist()
 
         message =
             if (gpsPointSaved) {
+
                 "Lectura registrada y posición GPS guardada."
+
             } else if (routeRecordingActive) {
+
                 "Lectura registrada. GPS aún no disponible."
+
             } else {
+
                 "Lectura registrada: $value"
             }
+
+        return true
+    }
+
+    // -------------------------------------------------------------------------
+    // EDITAR LECTURA
+    // -------------------------------------------------------------------------
+
+    fun editReading(
+        rowNumber: Int,
+        readingText: String
+    ): Boolean {
+
+        val value =
+            readingText.toLongOrNull()
+
+        if (value == null) {
+            message =
+                "Ingresa una lectura válida."
+
+            return false
+        }
+
+        val record =
+            records.firstOrNull {
+                it.rowNumber == rowNumber
+            }
+                ?: return false
+
+        val previous =
+            record.previousReading
+
+        if (
+            previous != null &&
+            value < previous
+        ) {
+
+            message =
+                "La lectura $value es menor que la anterior $previous."
+
+            return false
+        }
+
+        records =
+            records.map { currentRecord ->
+
+                if (
+                    currentRecord.rowNumber ==
+                    rowNumber
+                ) {
+
+                    currentRecord.copy(
+                        currentReading =
+                            value
+                    )
+
+                } else {
+
+                    currentRecord
+                }
+            }
+
+        val pointIndex =
+            routePoints.indexOfFirst {
+                it.recordRowNumber ==
+                        rowNumber
+            }
+
+        if (pointIndex >= 0) {
+
+            routePoints =
+                routePoints
+                    .toMutableList()
+                    .apply {
+
+                        val existingPoint =
+                            this[pointIndex]
+
+                        this[pointIndex] =
+                            existingPoint.copy(
+                                reading = value
+                            )
+                    }
+        }
+
+        rebuildSearchData()
+
+        applySearchImmediately(search)
+
+        persist()
+
+        message =
+            "Lectura modificada: $value"
 
         return true
     }
@@ -587,21 +754,37 @@ class ReadingViewModel(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // GPS / RUTA
+    // -------------------------------------------------------------------------
+
     fun startRouteRecording() {
+
         if (!imported) {
-            message = "Importa una ruta antes de iniciar la grabación GPS."
+            message =
+                "Importa una ruta antes de iniciar la grabación GPS."
+
             return
         }
 
-        routeRecordingActive = true
+        routeRecordingActive =
+            true
+
         persist()
-        message = "Grabación GPS iniciada. Cada lectura guardará su posición."
+
+        message =
+            "Grabación GPS iniciada. Cada lectura guardará su posición."
     }
 
     fun stopRouteRecording() {
-        routeRecordingActive = false
+
+        routeRecordingActive =
+            false
+
         persist()
-        message = "Grabación GPS detenida. Los puntos quedan guardados."
+
+        message =
+            "Grabación GPS detenida. Los puntos quedan guardados."
     }
 
     fun updateCurrentLocation(
@@ -609,16 +792,27 @@ class ReadingViewModel(
         longitude: Double,
         accuracyMeters: Float?
     ) {
-        currentLatitude = latitude
-        currentLongitude = longitude
-        currentAccuracyMeters = accuracyMeters
+
+        currentLatitude =
+            latitude
+
+        currentLongitude =
+            longitude
+
+        currentAccuracyMeters =
+            accuracyMeters
     }
 
     val routePointCount: Int
-        get() = routePoints.size
+        get() =
+            routePoints.size
 
-    fun updateNumericKeyboard(enabled: Boolean) {
-        numericKeyboard = enabled
+    fun updateNumericKeyboard(
+        enabled: Boolean
+    ) {
+
+        numericKeyboard =
+            enabled
 
         prefs.edit()
             .putBoolean(
@@ -628,8 +822,12 @@ class ReadingViewModel(
             .apply()
     }
 
-    fun updateSearchMode(mode: SearchMode) {
-        searchMode = mode
+    fun updateSearchMode(
+        mode: SearchMode
+    ) {
+
+        searchMode =
+            mode
 
         prefs.edit()
             .putString(
@@ -641,45 +839,82 @@ class ReadingViewModel(
         searchJob?.cancel()
 
         if (search.isBlank()) {
+
             applySearchImmediately("")
+
         } else {
-            searchJob = viewModelScope.launch {
-                delay(80)
-                applySearchImmediately(search)
-            }
+
+            searchJob =
+                viewModelScope.launch {
+
+                    delay(80)
+
+                    applySearchImmediately(
+                        search
+                    )
+                }
         }
     }
 
-    fun updateSearch(value: String) {
-        search = value
+    fun updateSearch(
+        value: String
+    ) {
+
+        search =
+            value
 
         searchJob?.cancel()
 
         if (value.isBlank()) {
+
             applySearchImmediately("")
+
             prefs.edit()
-                .putString("search_query", "")
+                .putString(
+                    "search_query",
+                    ""
+                )
                 .apply()
+
             return
         }
 
-        searchJob = viewModelScope.launch {
-            delay(160)
-            applySearchImmediately(value)
-            prefs.edit()
-                .putString("search_query", value)
-                .apply()
-        }
+        searchJob =
+            viewModelScope.launch {
+
+                delay(160)
+
+                applySearchImmediately(
+                    value
+                )
+
+                prefs.edit()
+                    .putString(
+                        "search_query",
+                        value
+                    )
+                    .apply()
+            }
     }
 
-    fun updateExpandedSegment(segmentId: Int?) {
-        lastExpandedSegmentId = segmentId
+    fun updateExpandedSegment(
+        segmentId: Int?
+    ) {
 
-        val editor = prefs.edit()
+        lastExpandedSegmentId =
+            segmentId
+
+        val editor =
+            prefs.edit()
 
         if (segmentId == null) {
-            editor.remove("last_expanded_segment_id")
+
+            editor.remove(
+                "last_expanded_segment_id"
+            )
+
         } else {
+
             editor.putInt(
                 "last_expanded_segment_id",
                 segmentId
@@ -689,7 +924,9 @@ class ReadingViewModel(
         editor.apply()
     }
 
-    fun getMeterCorrection(rowNumber: Int): MeterCorrection? =
+    fun getMeterCorrection(
+        rowNumber: Int
+    ): MeterCorrection? =
         meterCorrections[rowNumber]
 
     fun saveMeterCorrection(
@@ -697,51 +934,121 @@ class ReadingViewModel(
         physicalMeter: String,
         note: String
     ): Boolean {
-        val record = records.firstOrNull { it.rowNumber == rowNumber }
-            ?: return false
 
-        val normalizedPhysicalMeter = normalizeMeter(physicalMeter)
-        if (normalizedPhysicalMeter.isBlank() && note.isBlank()) {
-            meterCorrections = meterCorrections.toMutableMap().apply {
-                remove(rowNumber)
+        val record =
+            records.firstOrNull {
+                it.rowNumber ==
+                        rowNumber
             }
+                ?: return false
+
+        val normalizedPhysicalMeter =
+            normalizeMeter(
+                physicalMeter
+            )
+
+        if (
+            normalizedPhysicalMeter.isBlank() &&
+            note.isBlank()
+        ) {
+
+            meterCorrections =
+                meterCorrections
+                    .toMutableMap()
+                    .apply {
+                        remove(rowNumber)
+                    }
+
             rebuildSearchData()
-            applySearchImmediately(search)
+
+            applySearchImmediately(
+                search
+            )
+
             persist()
-            message = "Corrección eliminada."
+
+            message =
+                "Corrección eliminada."
+
             return true
         }
 
-        meterCorrections = meterCorrections.toMutableMap().apply {
-            this[rowNumber] = MeterCorrection(
-                excelMeter = normalizeMeter(record.meter),
-                physicalMeter = normalizedPhysicalMeter.ifBlank { normalizeMeter(record.meter) },
-                note = note.trim()
-            )
-        }
+        meterCorrections =
+            meterCorrections
+                .toMutableMap()
+                .apply {
+
+                    this[rowNumber] =
+                        MeterCorrection(
+
+                            excelMeter =
+                                normalizeMeter(
+                                    record.meter
+                                ),
+
+                            physicalMeter =
+                                normalizedPhysicalMeter
+                                    .ifBlank {
+                                        normalizeMeter(
+                                            record.meter
+                                        )
+                                    },
+
+                            note =
+                                note.trim()
+                        )
+                }
 
         rebuildSearchData()
-        applySearchImmediately(search)
+
+        applySearchImmediately(
+            search
+        )
+
         persist()
-        message = "Corrección de medidor guardada."
+
+        message =
+            "Corrección de medidor guardada."
+
         return true
     }
 
-    fun deleteMeterCorrection(rowNumber: Int) {
-        if (!meterCorrections.containsKey(rowNumber)) return
+    fun deleteMeterCorrection(
+        rowNumber: Int
+    ) {
 
-        meterCorrections = meterCorrections.toMutableMap().apply {
-            remove(rowNumber)
+        if (
+            !meterCorrections
+                .containsKey(rowNumber)
+        ) {
+            return
         }
 
+        meterCorrections =
+            meterCorrections
+                .toMutableMap()
+                .apply {
+                    remove(rowNumber)
+                }
+
         rebuildSearchData()
-        applySearchImmediately(search)
+
+        applySearchImmediately(
+            search
+        )
+
         persist()
-        message = "Corrección de medidor eliminada."
+
+        message =
+            "Corrección de medidor eliminada."
     }
 
-    fun getMeterNote(rowNumber: Int): String =
-        meterCorrections[rowNumber]?.note.orEmpty()
+    fun getMeterNote(
+        rowNumber: Int
+    ): String =
+        meterCorrections[rowNumber]
+            ?.note
+            .orEmpty()
 
     fun clearMessage() {
         message = null
@@ -752,62 +1059,134 @@ class ReadingViewModel(
         latitude: Double,
         longitude: Double
     ) {
-        val index = routePoints.indexOfFirst {
-            it.recordRowNumber == rowNumber
+
+        val index =
+            routePoints.indexOfFirst {
+                it.recordRowNumber ==
+                        rowNumber
+            }
+
+        if (index < 0) {
+            return
         }
 
-        if (index < 0) return
+        routePoints =
+            routePoints
+                .toMutableList()
+                .apply {
 
-        routePoints = routePoints.toMutableList().apply {
-            val point = this[index]
-            this[index] = point.copy(
-                latitude = latitude,
-                longitude = longitude
-            )
-        }
+                    val point =
+                        this[index]
+
+                    this[index] =
+                        point.copy(
+                            latitude =
+                                latitude,
+
+                            longitude =
+                                longitude
+                        )
+                }
 
         persist()
-        message = "Ubicación del punto actualizada."
+
+        message =
+            "Ubicación del punto actualizada."
     }
 
     fun deleteRoutePoint(
         rowNumber: Int
     ) {
-        val originalSize = routePoints.size
 
-        routePoints = routePoints.filterNot {
-            it.recordRowNumber == rowNumber
-        }
+        val originalSize =
+            routePoints.size
 
-        if (routePoints.size != originalSize) {
+        routePoints =
+            routePoints.filterNot {
+                it.recordRowNumber ==
+                        rowNumber
+            }
+
+        if (
+            routePoints.size !=
+            originalSize
+        ) {
+
             persist()
-            message = "Ubicación del punto eliminada."
+
+            message =
+                "Ubicación del punto eliminada."
         }
     }
 
     private fun serializeRoutePoints(
         points: List<RoutePoint>
     ): String {
-        val array = JSONArray()
+
+        val array =
+            JSONArray()
 
         points.forEach { point ->
+
             array.put(
                 JSONObject().apply {
-                    put("row", point.recordRowNumber)
-                    put("nir", point.nir)
-                    put("meter", point.meter)
-                    put("user", point.user)
-                    put("address", point.address)
-                    put("neighborhood", point.neighborhood)
-                    put("reading", point.reading)
-                    put("latitude", point.latitude)
-                    put("longitude", point.longitude)
+
+                    put(
+                        "row",
+                        point.recordRowNumber
+                    )
+
+                    put(
+                        "nir",
+                        point.nir
+                    )
+
+                    put(
+                        "meter",
+                        point.meter
+                    )
+
+                    put(
+                        "user",
+                        point.user
+                    )
+
+                    put(
+                        "address",
+                        point.address
+                    )
+
+                    put(
+                        "neighborhood",
+                        point.neighborhood
+                    )
+
+                    put(
+                        "reading",
+                        point.reading
+                    )
+
+                    put(
+                        "latitude",
+                        point.latitude
+                    )
+
+                    put(
+                        "longitude",
+                        point.longitude
+                    )
+
                     put(
                         "accuracy",
-                        point.accuracyMeters?.toDouble()
+                        point.accuracyMeters
+                            ?.toDouble()
                             ?: JSONObject.NULL
                     )
-                    put("timestamp", point.timestamp)
+
+                    put(
+                        "timestamp",
+                        point.timestamp
+                    )
                 }
             )
         }
@@ -816,17 +1195,38 @@ class ReadingViewModel(
     }
 
     private fun serializeMeterCorrections(
-        corrections: Map<Int, MeterCorrection>
+        corrections:
+        Map<Int, MeterCorrection>
     ): String {
-        val array = JSONArray()
 
-        corrections.forEach { (rowNumber, correction) ->
+        val array =
+            JSONArray()
+
+        corrections.forEach {
+                (rowNumber, correction) ->
+
             array.put(
                 JSONObject().apply {
-                    put("row", rowNumber)
-                    put("excelMeter", correction.excelMeter)
-                    put("physicalMeter", correction.physicalMeter)
-                    put("note", correction.note)
+
+                    put(
+                        "row",
+                        rowNumber
+                    )
+
+                    put(
+                        "excelMeter",
+                        correction.excelMeter
+                    )
+
+                    put(
+                        "physicalMeter",
+                        correction.physicalMeter
+                    )
+
+                    put(
+                        "note",
+                        correction.note
+                    )
                 }
             )
         }
@@ -834,31 +1234,74 @@ class ReadingViewModel(
         return array.toString()
     }
 
-    private fun loadMeterCorrections(): Map<Int, MeterCorrection> {
-        val json = prefs.getString("meter_corrections", "[]") ?: "[]"
+    private fun loadMeterCorrections():
+            Map<Int, MeterCorrection> {
+
+        val json =
+            prefs.getString(
+                "meter_corrections",
+                "[]"
+            ) ?: "[]"
 
         return runCatching {
-            val array = JSONArray(json)
+
+            val array =
+                JSONArray(json)
+
             buildMap {
-                for (index in 0 until array.length()) {
-                    val obj = array.getJSONObject(index)
-                    val rowNumber = obj.optInt("row", -1)
-                    if (rowNumber >= 0) {
+
+                for (
+                index in
+                0 until array.length()
+                ) {
+
+                    val obj =
+                        array.getJSONObject(
+                            index
+                        )
+
+                    val rowNumber =
+                        obj.optInt(
+                            "row",
+                            -1
+                        )
+
+                    if (
+                        rowNumber >= 0
+                    ) {
+
                         put(
                             rowNumber,
                             MeterCorrection(
-                                excelMeter = obj.optString("excelMeter"),
-                                physicalMeter = obj.optString("physicalMeter"),
-                                note = obj.optString("note")
+
+                                excelMeter =
+                                    obj.optString(
+                                        "excelMeter"
+                                    ),
+
+                                physicalMeter =
+                                    obj.optString(
+                                        "physicalMeter"
+                                    ),
+
+                                note =
+                                    obj.optString(
+                                        "note"
+                                    )
                             )
                         )
                     }
                 }
             }
-        }.getOrDefault(emptyMap())
+
+        }.getOrDefault(
+            emptyMap()
+        )
     }
 
-    private fun loadRoutePoints(): List<RoutePoint> {
+    private fun loadRoutePoints():
+            List<RoutePoint> {
+
         val json =
             prefs.getString(
                 "route_gps_points",
@@ -866,31 +1309,79 @@ class ReadingViewModel(
             ) ?: "[]"
 
         return runCatching {
-            val array = JSONArray(json)
 
-            List(array.length()) { index ->
-                val obj = array.getJSONObject(index)
+            val array =
+                JSONArray(json)
+
+            List(
+                array.length()
+            ) { index ->
+
+                val obj =
+                    array.getJSONObject(
+                        index
+                    )
 
                 RoutePoint(
-                    recordRowNumber = obj.optInt("row"),
-                    nir = obj.optString("nir"),
-                    meter = obj.optString("meter"),
-                    user = obj.optString("user"),
-                    address = obj.optString("address"),
-                    neighborhood = obj.optString("neighborhood"),
-                    reading = obj.optLong("reading"),
-                    latitude = obj.optDouble("latitude"),
-                    longitude = obj.optDouble("longitude"),
+
+                    recordRowNumber =
+                        obj.optInt("row"),
+
+                    nir =
+                        obj.optString("nir"),
+
+                    meter =
+                        obj.optString("meter"),
+
+                    user =
+                        obj.optString("user"),
+
+                    address =
+                        obj.optString("address"),
+
+                    neighborhood =
+                        obj.optString(
+                            "neighborhood"
+                        ),
+
+                    reading =
+                        obj.optLong(
+                            "reading"
+                        ),
+
+                    latitude =
+                        obj.optDouble(
+                            "latitude"
+                        ),
+
+                    longitude =
+                        obj.optDouble(
+                            "longitude"
+                        ),
+
                     accuracyMeters =
-                        if (obj.isNull("accuracy")) {
+                        if (
+                            obj.isNull(
+                                "accuracy"
+                            )
+                        ) {
                             null
                         } else {
-                            obj.optDouble("accuracy").toFloat()
+                            obj.optDouble(
+                                "accuracy"
+                            ).toFloat()
                         },
-                    timestamp = obj.optLong("timestamp")
+
+                    timestamp =
+                        obj.optLong(
+                            "timestamp"
+                        )
                 )
             }
-        }.getOrDefault(emptyList())
+
+        }.getOrDefault(
+            emptyList()
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -913,118 +1404,237 @@ class ReadingViewModel(
     )
 
     private fun rebuildSearchData() {
-        searchIndex = records.map { record ->
-            SearchEntry(
-                record = record,
-                meter = normalizeMeter(record.meter),
-                meterDigits = normalizeMeter(record.meter)
-                    .filter(Char::isDigit),
-                physicalMeter = normalizeMeter(
-                    meterCorrections[record.rowNumber]?.physicalMeter
-                        ?: record.meter
-                ),
-                physicalMeterDigits = normalizeMeter(
-                    meterCorrections[record.rowNumber]?.physicalMeter
-                        ?: record.meter
-                ).filter(Char::isDigit),
-                address = normalizeText(record.address),
-                user = normalizeText(record.user),
-                neighborhood = normalizeText(record.neighborhood),
-                nir = normalizeText(record.nir),
-                observation = normalizeText(record.observation),
-                previous = record.previousReading?.toString().orEmpty(),
-                current = record.currentReading?.toString().orEmpty()
-            )
-        }
 
-        cachedRouteSegments = buildRouteSegments(records)
+        searchIndex =
+            records.map { record ->
+
+                SearchEntry(
+
+                    record =
+                        record,
+
+                    meter =
+                        normalizeMeter(
+                            record.meter
+                        ),
+
+                    meterDigits =
+                        normalizeMeter(
+                            record.meter
+                        ).filter(
+                            Char::isDigit
+                        ),
+
+                    physicalMeter =
+                        normalizeMeter(
+                            meterCorrections[
+                                record.rowNumber
+                            ]?.physicalMeter
+                                ?: record.meter
+                        ),
+
+                    physicalMeterDigits =
+                        normalizeMeter(
+                            meterCorrections[
+                                record.rowNumber
+                            ]?.physicalMeter
+                                ?: record.meter
+                        ).filter(
+                            Char::isDigit
+                        ),
+
+                    address =
+                        normalizeText(
+                            record.address
+                        ),
+
+                    user =
+                        normalizeText(
+                            record.user
+                        ),
+
+                    neighborhood =
+                        normalizeText(
+                            record.neighborhood
+                        ),
+
+                    nir =
+                        normalizeText(
+                            record.nir
+                        ),
+
+                    observation =
+                        normalizeText(
+                            record.observation
+                        ),
+
+                    previous =
+                        record.previousReading
+                            ?.toString()
+                            .orEmpty(),
+
+                    current =
+                        record.currentReading
+                            ?.toString()
+                            .orEmpty()
+                )
+            }
+
+        cachedRouteSegments =
+            buildRouteSegments(
+                records
+            )
     }
 
-    private fun applySearchImmediately(value: String) {
-        val normalized = normalizeText(value)
+    private fun applySearchImmediately(
+        value: String
+    ) {
 
-        if (normalized.isEmpty()) {
-            filtered = records
-            visibleRouteSegments = routeSegments
+        val normalized =
+            normalizeText(value)
+
+        if (
+            normalized.isEmpty()
+        ) {
+
+            filtered =
+                records
+
+            visibleRouteSegments =
+                routeSegments
+
             return
         }
 
-        val compact = normalized.filter(Char::isLetterOrDigit)
-        val digits = normalized.filter(Char::isDigit)
+        val compact =
+            normalized.filter(
+                Char::isLetterOrDigit
+            )
 
-        val queryMeter = normalizeMeter(value)
-        val queryMeterDigits = queryMeter.filter(Char::isDigit)
+        val digits =
+            normalized.filter(
+                Char::isDigit
+            )
 
-        val scored = searchIndex.mapNotNull { entry ->
-            val score = when (searchMode) {
-                SearchMode.METER -> scoreMeter(
-                    entry,
-                    queryMeter,
-                    queryMeterDigits,
-                    digits,
-                    compact
-                )
+        val queryMeter =
+            normalizeMeter(value)
 
-                SearchMode.USER -> scoreTextField(
-                    entry.user,
-                    normalized
-                )
+        val queryMeterDigits =
+            queryMeter.filter(
+                Char::isDigit
+            )
 
-                SearchMode.ADDRESS -> scoreTextField(
-                    entry.address,
-                    normalized
-                )
+        val scored =
+            searchIndex.mapNotNull {
+                    entry ->
 
-                SearchMode.NEIGHBORHOOD -> scoreTextField(
-                    entry.neighborhood,
-                    normalized
-                )
+                val score =
+                    when (searchMode) {
 
-                SearchMode.NIR -> scoreTextField(
-                    entry.nir,
-                    normalized
-                )
+                        SearchMode.METER ->
+                            scoreMeter(
+                                entry,
+                                queryMeter,
+                                queryMeterDigits,
+                                digits,
+                                compact
+                            )
 
-                SearchMode.READING -> scoreReading(
-                    entry,
-                    digits,
-                    normalized
-                )
+                        SearchMode.USER ->
+                            scoreTextField(
+                                entry.user,
+                                normalized
+                            )
 
-                SearchMode.OBSERVATION -> scoreTextField(
-                    entry.observation,
-                    normalized
-                )
+                        SearchMode.ADDRESS ->
+                            scoreTextField(
+                                entry.address,
+                                normalized
+                            )
 
-                SearchMode.ALL -> scoreAll(
-                    entry,
-                    normalized,
-                    compact,
-                    digits,
-                    queryMeter,
-                    queryMeterDigits
-                )
+                        SearchMode.NEIGHBORHOOD ->
+                            scoreTextField(
+                                entry.neighborhood,
+                                normalized
+                            )
+
+                        SearchMode.NIR ->
+                            scoreTextField(
+                                entry.nir,
+                                normalized
+                            )
+
+                        SearchMode.READING ->
+                            scoreReading(
+                                entry,
+                                digits,
+                                normalized
+                            )
+
+                        SearchMode.OBSERVATION ->
+                            scoreTextField(
+                                entry.observation,
+                                normalized
+                            )
+
+                        SearchMode.ALL ->
+                            scoreAll(
+                                entry,
+                                normalized,
+                                compact,
+                                digits,
+                                queryMeter,
+                                queryMeterDigits
+                            )
+                    }
+
+                if (
+                    score > 0
+                ) {
+                    entry.record to score
+                } else {
+                    null
+                }
             }
 
-            if (score > 0) entry.record to score else null
-        }
+        filtered =
+            scored
+                .sortedByDescending {
+                    it.second
+                }
+                .map {
+                    it.first
+                }
 
-        filtered = scored
-            .sortedByDescending { it.second }
-            .map { it.first }
+        val matchingRows =
+            filtered
+                .asSequence()
+                .map {
+                    it.rowNumber
+                }
+                .toHashSet()
 
-        val matchingRows = filtered.asSequence()
-            .map { it.rowNumber }
-            .toHashSet()
+        visibleRouteSegments =
+            routeSegments.mapNotNull {
+                    segment ->
 
-        visibleRouteSegments = routeSegments.mapNotNull { segment ->
-            val visibleRecords = segment.records.filter {
-                it.rowNumber in matchingRows
+                val visibleRecords =
+                    segment.records.filter {
+                        it.rowNumber in
+                                matchingRows
+                    }
+
+                if (
+                    visibleRecords.isEmpty()
+                ) {
+                    null
+                } else {
+                    segment.copy(
+                        records =
+                            visibleRecords
+                    )
+                }
             }
-
-            if (visibleRecords.isEmpty()) null
-            else segment.copy(records = visibleRecords)
-        }
     }
 
     private fun scoreMeter(
@@ -1034,28 +1644,66 @@ class ReadingViewModel(
         digits: String,
         compact: String
     ): Int {
-        if (queryMeter.isBlank()) return 0
 
-        if (digits.length == 4) {
+        if (
+            queryMeter.isBlank()
+        ) {
+            return 0
+        }
+
+        if (
+            digits.length == 4
+        ) {
+
             return when {
-                entry.physicalMeterDigits.endsWith(digits) -> 950
-                entry.meterDigits.endsWith(digits) -> 900
-                else -> 0
+
+                entry.physicalMeterDigits
+                    .endsWith(digits) ->
+                    950
+
+                entry.meterDigits
+                    .endsWith(digits) ->
+                    900
+
+                else ->
+                    0
             }
         }
 
         return when {
-            entry.physicalMeter == queryMeter -> 1000
-            entry.meter == queryMeter -> 980
+
+            entry.physicalMeter ==
+                    queryMeter ->
+                1000
+
+            entry.meter ==
+                    queryMeter ->
+                980
+
             queryMeterDigits.isNotBlank() &&
-                    entry.physicalMeterDigits == queryMeterDigits -> 960
+                    entry.physicalMeterDigits ==
+                    queryMeterDigits ->
+                960
+
             queryMeterDigits.isNotBlank() &&
-                    entry.meterDigits == queryMeterDigits -> 950
+                    entry.meterDigits ==
+                    queryMeterDigits ->
+                950
+
             compact.isNotEmpty() &&
-                    entry.physicalMeter.contains(compact) -> 850
+                    entry.physicalMeter.contains(
+                        compact
+                    ) ->
+                850
+
             compact.isNotEmpty() &&
-                    entry.meter.contains(compact) -> 800
-            else -> 0
+                    entry.meter.contains(
+                        compact
+                    ) ->
+                800
+
+            else ->
+                0
         }
     }
 
@@ -1063,13 +1711,26 @@ class ReadingViewModel(
         field: String,
         query: String
     ): Int {
-        if (query.isBlank()) return 0
+
+        if (
+            query.isBlank()
+        ) {
+            return 0
+        }
 
         return when {
-            field == query -> 1000
-            field.startsWith(query) -> 900
-            field.contains(query) -> 800
-            else -> 0
+
+            field == query ->
+                1000
+
+            field.startsWith(query) ->
+                900
+
+            field.contains(query) ->
+                800
+
+            else ->
+                0
         }
     }
 
@@ -1078,17 +1739,41 @@ class ReadingViewModel(
         digits: String,
         normalized: String
     ): Int {
-        if (digits.isBlank() || normalized.any { !it.isDigit() && !it.isWhitespace() }) {
+
+        if (
+            digits.isBlank() ||
+            normalized.any {
+                !it.isDigit() &&
+                        !it.isWhitespace()
+            }
+        ) {
             return 0
         }
 
         return when {
-            entry.previous == digits || entry.current == digits -> 1000
-            entry.previous.startsWith(digits) ||
-                    entry.current.startsWith(digits) -> 900
-            entry.previous.contains(digits) ||
-                    entry.current.contains(digits) -> 800
-            else -> 0
+
+            entry.previous == digits ||
+                    entry.current == digits ->
+                1000
+
+            entry.previous.startsWith(
+                digits
+            ) ||
+                    entry.current.startsWith(
+                        digits
+                    ) ->
+                900
+
+            entry.previous.contains(
+                digits
+            ) ||
+                    entry.current.contains(
+                        digits
+                    ) ->
+                800
+
+            else ->
+                0
         }
     }
 
@@ -1100,35 +1785,213 @@ class ReadingViewModel(
         queryMeter: String,
         queryMeterDigits: String
     ): Int {
+
         var score = 0
 
-        if (queryMeter.isNotBlank() && entry.physicalMeter == queryMeter) score = maxOf(score, 1000)
-        if (queryMeter.isNotBlank() && entry.meter == queryMeter) score = maxOf(score, 980)
-        if (queryMeterDigits.isNotBlank() && entry.physicalMeterDigits == queryMeterDigits) score = maxOf(score, 960)
-        if (queryMeterDigits.isNotBlank() && entry.meterDigits == queryMeterDigits) score = maxOf(score, 950)
-        if (digits.length == 4 && entry.physicalMeterDigits.endsWith(digits)) score = maxOf(score, 910)
-        if (digits.length == 4 && entry.meterDigits.endsWith(digits)) score = maxOf(score, 900)
-        if (compact.isNotEmpty() && entry.physicalMeter.contains(compact)) score = maxOf(score, 850)
-        if (compact.isNotEmpty() && entry.meter.contains(compact)) score = maxOf(score, 800)
-
-        if (digits.isNotBlank()) {
-            if (entry.nir.contains(digits)) score = maxOf(score, 700)
-            if (entry.previous.contains(digits)) score = maxOf(score, 650)
-            if (entry.current.contains(digits)) score = maxOf(score, 650)
+        if (
+            queryMeter.isNotBlank() &&
+            entry.physicalMeter ==
+            queryMeter
+        ) {
+            score =
+                maxOf(
+                    score,
+                    1000
+                )
         }
 
-        if (entry.address.contains(normalized)) score = maxOf(score, 600)
-        if (entry.user.contains(normalized)) score = maxOf(score, 600)
-        if (entry.neighborhood.contains(normalized)) score = maxOf(score, 550)
-        if (entry.nir.contains(normalized)) score = maxOf(score, 500)
-        if (entry.observation.contains(normalized)) score = maxOf(score, 400)
+        if (
+            queryMeter.isNotBlank() &&
+            entry.meter ==
+            queryMeter
+        ) {
+            score =
+                maxOf(
+                    score,
+                    980
+                )
+        }
+
+        if (
+            queryMeterDigits.isNotBlank() &&
+            entry.physicalMeterDigits ==
+            queryMeterDigits
+        ) {
+            score =
+                maxOf(
+                    score,
+                    960
+                )
+        }
+
+        if (
+            queryMeterDigits.isNotBlank() &&
+            entry.meterDigits ==
+            queryMeterDigits
+        ) {
+            score =
+                maxOf(
+                    score,
+                    950
+                )
+        }
+
+        if (
+            digits.length == 4 &&
+            entry.physicalMeterDigits
+                .endsWith(digits)
+        ) {
+            score =
+                maxOf(
+                    score,
+                    910
+                )
+        }
+
+        if (
+            digits.length == 4 &&
+            entry.meterDigits
+                .endsWith(digits)
+        ) {
+            score =
+                maxOf(
+                    score,
+                    900
+                )
+        }
+
+        if (
+            compact.isNotEmpty() &&
+            entry.physicalMeter.contains(
+                compact
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    850
+                )
+        }
+
+        if (
+            compact.isNotEmpty() &&
+            entry.meter.contains(
+                compact
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    800
+                )
+        }
+
+        if (
+            digits.isNotBlank()
+        ) {
+
+            if (
+                entry.nir.contains(
+                    digits
+                )
+            ) {
+                score =
+                    maxOf(
+                        score,
+                        700
+                    )
+            }
+
+            if (
+                entry.previous.contains(
+                    digits
+                )
+            ) {
+                score =
+                    maxOf(
+                        score,
+                        650
+                    )
+            }
+
+            if (
+                entry.current.contains(
+                    digits
+                )
+            ) {
+                score =
+                    maxOf(
+                        score,
+                        650
+                    )
+            }
+        }
+
+        if (
+            entry.address.contains(
+                normalized
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    600
+                )
+        }
+
+        if (
+            entry.user.contains(
+                normalized
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    600
+                )
+        }
+
+        if (
+            entry.neighborhood.contains(
+                normalized
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    550
+                )
+        }
+
+        if (
+            entry.nir.contains(
+                normalized
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    500
+                )
+        }
+
+        if (
+            entry.observation.contains(
+                normalized
+            )
+        ) {
+            score =
+                maxOf(
+                    score,
+                    400
+                )
+        }
 
         return score
     }
 
     // -------------------------------------------------------------------------
     // RESUMEN GENERAL
-
     // -------------------------------------------------------------------------
 
     val pendingCount: Int
@@ -1148,56 +2011,136 @@ class ReadingViewModel(
     // -------------------------------------------------------------------------
 
     val routeSegments: List<RouteSegment>
-        get() = cachedRouteSegments
+        get() =
+            cachedRouteSegments
 
     private fun buildRouteSegments(
         source: List<MeterRecord>
     ): List<RouteSegment> {
 
-        if (source.isEmpty()) {
+        if (
+            source.isEmpty()
+        ) {
             return emptyList()
         }
 
-        val segments = mutableListOf<RouteSegment>()
-        val occurrenceCount = mutableMapOf<String, Int>()
-        var segmentId = 0
-        var currentName = source.first().neighborhood.trim().ifBlank { "SIN BARRIO" }
-        var currentRecords = mutableListOf<MeterRecord>()
+        val segments =
+            mutableListOf<RouteSegment>()
 
-        source.forEachIndexed { index, record ->
-            val name = record.neighborhood.trim().ifBlank { "SIN BARRIO" }
+        val occurrenceCount =
+            mutableMapOf<String, Int>()
 
-            if (name != currentName) {
-                val occurrence = occurrenceCount[currentName] ?: 0
-                occurrenceCount[currentName] = occurrence + 1
-                val displayName = if (occurrence == 0) currentName else "$currentName ${occurrence + 1}"
+        var segmentId =
+            0
+
+        var currentName =
+            source.first()
+                .neighborhood
+                .trim()
+                .ifBlank {
+                    "SIN BARRIO"
+                }
+
+        var currentRecords =
+            mutableListOf<MeterRecord>()
+
+        source.forEachIndexed {
+                index,
+                record ->
+
+            val name =
+                record.neighborhood
+                    .trim()
+                    .ifBlank {
+                        "SIN BARRIO"
+                    }
+
+            if (
+                name != currentName
+            ) {
+
+                val occurrence =
+                    occurrenceCount[
+                        currentName
+                    ] ?: 0
+
+                occurrenceCount[
+                    currentName
+                ] =
+                    occurrence + 1
+
+                val displayName =
+                    if (
+                        occurrence == 0
+                    ) {
+                        currentName
+                    } else {
+                        "$currentName ${occurrence + 1}"
+                    }
 
                 segments.add(
                     RouteSegment(
-                        id = segmentId++,
-                        originalName = currentName,
-                        displayName = displayName,
-                        records = currentRecords.toList()
+                        id =
+                            segmentId++,
+
+                        originalName =
+                            currentName,
+
+                        displayName =
+                            displayName,
+
+                        records =
+                            currentRecords.toList()
                     )
                 )
 
-                currentName = name
-                currentRecords = mutableListOf()
+                currentName =
+                    name
+
+                currentRecords =
+                    mutableListOf()
             }
 
-            currentRecords.add(record)
+            currentRecords.add(
+                record
+            )
 
-            if (index == source.lastIndex) {
-                val occurrence = occurrenceCount[currentName] ?: 0
-                occurrenceCount[currentName] = occurrence + 1
-                val displayName = if (occurrence == 0) currentName else "$currentName ${occurrence + 1}"
+            if (
+                index == source.lastIndex
+            ) {
+
+                val occurrence =
+                    occurrenceCount[
+                        currentName
+                    ] ?: 0
+
+                occurrenceCount[
+                    currentName
+                ] =
+                    occurrence + 1
+
+                val displayName =
+                    if (
+                        occurrence == 0
+                    ) {
+                        currentName
+                    } else {
+                        "$currentName ${occurrence + 1}"
+                    }
 
                 segments.add(
                     RouteSegment(
-                        id = segmentId,
-                        originalName = currentName,
-                        displayName = displayName,
-                        records = currentRecords.toList()
+                        id =
+                            segmentId,
+
+                        originalName =
+                            currentName,
+
+                        displayName =
+                            displayName,
+
+                        records =
+                            currentRecords.toList()
                     )
                 )
             }
@@ -1234,33 +2177,63 @@ class ReadingViewModel(
     private fun normalizeText(
         value: String
     ): String {
+
         return java.text.Normalizer
-            .normalize(value, java.text.Normalizer.Form.NFD)
-            .replace(MARKS_REGEX, "")
+            .normalize(
+                value,
+                java.text.Normalizer.Form.NFD
+            )
+            .replace(
+                MARKS_REGEX,
+                ""
+            )
             .lowercase()
-            .replace(NON_ALNUM_REGEX, " ")
+            .replace(
+                NON_ALNUM_REGEX,
+                " "
+            )
             .trim()
-            .replace(SPACES_REGEX, " ")
+            .replace(
+                SPACES_REGEX,
+                " "
+            )
     }
 
     private fun normalizeMeter(
         value: String
     ): String {
-        val cleaned = value.trim().replace(",", ".")
+
+        val cleaned =
+            value
+                .trim()
+                .replace(
+                    ",",
+                    "."
+                )
 
         return runCatching {
-            java.math.BigDecimal(cleaned)
+
+            java.math.BigDecimal(
+                cleaned
+            )
                 .stripTrailingZeros()
                 .toPlainString()
+
         }.getOrElse {
+
             cleaned
         }
     }
 
     companion object {
-        private val MARKS_REGEX = Regex("\\p{M}+")
-        private val NON_ALNUM_REGEX = Regex("[^\\p{L}\\p{N}]+")
-        private val SPACES_REGEX = Regex("\\s+")
-    }
 
+        private val MARKS_REGEX =
+            Regex("\\p{M}+")
+
+        private val NON_ALNUM_REGEX =
+            Regex("[^\\p{L}\\p{N}]+")
+
+        private val SPACES_REGEX =
+            Regex("\\s+")
+    }
 }

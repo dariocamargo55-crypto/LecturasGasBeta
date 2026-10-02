@@ -1,10 +1,11 @@
-
 package com.lecturasgas.beta
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.content.pm.PackageManager
@@ -13,6 +14,9 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -42,8 +47,10 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lecturasgas.beta.viewmodel.ReadingViewModel
+import com.google.gson.JsonObject
 import org.maplibre.android.MapLibre
 import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.annotations.MarkerOptions
@@ -60,6 +67,221 @@ import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.annotations.Marker
 import org.maplibre.android.maps.MapView
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.RasterLayer
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.RasterSource
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.sources.TileSet
+
+
+private fun createDropPinBitmap(
+    fillColor: Int,
+    selected: Boolean = false
+): Bitmap {
+    val width = 64
+    val height = 76
+    val bitmap = Bitmap.createBitmap(
+        width,
+        height,
+        Bitmap.Config.ARGB_8888
+    )
+
+    val canvas = Canvas(bitmap)
+    val centerX = width / 2f
+
+    fun drawPin(pathColor: Int, strokeColor: Int, strokeWidth: Float) {
+        val path = android.graphics.Path().apply {
+            moveTo(centerX, 70f)
+            cubicTo(
+                27f,
+                64f,
+                10f,
+                49f,
+                10f,
+                31f
+            )
+            cubicTo(
+                10f,
+                18f,
+                20f,
+                8f,
+                centerX,
+                8f
+            )
+            cubicTo(
+                44f,
+                8f,
+                54f,
+                18f,
+                54f,
+                31f
+            )
+            cubicTo(
+                54f,
+                49f,
+                37f,
+                64f,
+                centerX,
+                70f
+            )
+            close()
+        }
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = pathColor
+            style = Paint.Style.FILL
+        }
+        canvas.drawPath(path, paint)
+
+        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = strokeColor
+            style = Paint.Style.STROKE
+            this.strokeWidth = strokeWidth
+            strokeJoin = Paint.Join.ROUND
+        }
+        canvas.drawPath(path, border)
+    }
+
+    drawPin(
+        Color.WHITE,
+        Color.WHITE,
+        2f
+    )
+
+    val innerPath = android.graphics.Path().apply {
+        moveTo(centerX, 66f)
+        cubicTo(
+            28f,
+            60f,
+            14f,
+            47f,
+            14f,
+            31f
+        )
+        cubicTo(
+            14f,
+            20f,
+            22f,
+            12f,
+            centerX,
+            12f
+        )
+        cubicTo(
+            42f,
+            12f,
+            50f,
+            20f,
+            50f,
+            31f
+        )
+        cubicTo(
+            50f,
+            47f,
+            36f,
+            60f,
+            centerX,
+            66f
+        )
+        close()
+    }
+
+    val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fillColor
+        style = Paint.Style.FILL
+    }
+    canvas.drawPath(innerPath, innerPaint)
+
+    val centerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(
+        centerX,
+        30f,
+        9f,
+        centerPaint
+    )
+
+    val centerDot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = if (selected) Color.BLACK else Color.DKGRAY
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(
+        centerX,
+        30f,
+        4f,
+        centerDot
+    )
+
+    return bitmap
+}
+
+private fun refreshSatellitePointsOnMap(
+    mapInstance: MapLibreMap?,
+    satellitePointSourceId: String,
+    routePoints: List<com.lecturasgas.beta.data.model.RoutePoint>,
+    records: List<com.lecturasgas.beta.data.model.MeterRecord>,
+    focusRecordRowNumber: Int?,
+    temporaryRowNumber: Int? = null,
+    temporaryLocation: LatLng? = null
+) {
+    val style = mapInstance?.style ?: return
+
+    val source =
+        style.getSourceAs<GeoJsonSource>(
+            satellitePointSourceId
+        ) ?: return
+
+    val featuresJson =
+        routePoints.joinToString(
+            separator = ",",
+            prefix = "{\"type\":\"FeatureCollection\",\"features\":[",
+            postfix = "]}"
+        ) { point ->
+            val isTemporary =
+                temporaryRowNumber != null &&
+                        temporaryRowNumber == point.recordRowNumber &&
+                        temporaryLocation != null
+
+            val latitude =
+                if (isTemporary) {
+                    temporaryLocation!!.latitude
+                } else {
+                    point.latitude
+                }
+
+            val longitude =
+                if (isTemporary) {
+                    temporaryLocation!!.longitude
+                } else {
+                    point.longitude
+                }
+
+            val currentReading =
+                records.firstOrNull {
+                    it.rowNumber == point.recordRowNumber
+                }?.currentReading
+
+            val status =
+                if (currentReading != null) {
+                    "read"
+                } else {
+                    "pending"
+                }
+
+            val focused =
+                focusRecordRowNumber != null &&
+                        focusRecordRowNumber == point.recordRowNumber
+
+            "{\"type\":\"Feature\",\"properties\":{\"rowNumber\":${point.recordRowNumber},\"status\":\"$status\",\"focused\":$focused},\"geometry\":{\"type\":\"Point\",\"coordinates\":[$longitude,$latitude]}}"
+        }
+
+    source.setGeoJson(featuresJson)
+}
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -67,6 +289,7 @@ fun MapScreen(
     modifier: Modifier = Modifier,
     focusRecordRowNumber: Int? = null,
     onMarkerClick: (Int) -> Unit = {},
+    onBackToReadings: () -> Unit = {},
     vm: ReadingViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -119,45 +342,48 @@ fun MapScreen(
         mutableStateOf<LocationEngineCallback<LocationEngineResult>?>(null)
     }
 
-    fun createMarkerIcon(tintColor: Int) =
+    var satelliteEnabled by remember {
+        mutableStateOf(false)
+    }
+
+    val satellitePointSourceId = "lecturas_satellite_points"
+    val satellitePendingLayerId = "lecturas_satellite_points_pending"
+    val satelliteReadLayerId = "lecturas_satellite_points_read"
+    val satelliteFocusLayerId = "lecturas_satellite_points_focus"
+
+    var zoomDisplay by remember {
+        mutableStateOf(17.0)
+    }
+
+    val greenMarkerIcon = remember {
         IconFactory
             .getInstance(context)
             .fromBitmap(
-                Bitmap.createBitmap(
-                    (context.getDrawable(
-                        org.maplibre.android.R.drawable.maplibre_marker_icon_default
-                    )!!.intrinsicWidth.takeIf { it > 0 } ?: 48),
-                    (context.getDrawable(
-                        org.maplibre.android.R.drawable.maplibre_marker_icon_default
-                    )!!.intrinsicHeight.takeIf { it > 0 } ?: 48),
-                    Bitmap.Config.ARGB_8888
-                ).also { bitmap ->
-                    val drawable =
-                        context.getDrawable(
-                            org.maplibre.android.R.drawable.maplibre_marker_icon_default
-                        )!!.mutate()
-
-                    drawable.setTint(tintColor)
-
-                    val canvas = Canvas(bitmap)
-
-                    drawable.setBounds(
-                        0,
-                        0,
-                        bitmap.width,
-                        bitmap.height
-                    )
-
-                    drawable.draw(canvas)
-                }
+                createDropPinBitmap(
+                    Color.rgb(34, 197, 94)
+                )
             )
-
-    val greenMarkerIcon = remember {
-        createMarkerIcon(Color.GREEN)
     }
 
     val redMarkerIcon = remember {
-        createMarkerIcon(Color.RED)
+        IconFactory
+            .getInstance(context)
+            .fromBitmap(
+                createDropPinBitmap(
+                    Color.rgb(229, 57, 53)
+                )
+            )
+    }
+
+    val focusMarkerIcon = remember {
+        IconFactory
+            .getInstance(context)
+            .fromBitmap(
+                createDropPinBitmap(
+                    Color.rgb(255, 214, 0),
+                    selected = true
+                )
+            )
     }
 
     val mapView = remember {
@@ -177,6 +403,170 @@ fun MapScreen(
                 ) { style ->
                     mapInstance = map
                     mapStyleReady = true
+
+                    map.setMaxZoomPreference(22.0)
+
+                    val satelliteSourceId =
+                        "lecturas_satellite_source"
+
+                    val satelliteLayerId =
+                        "lecturas_satellite_layer"
+
+                    if (style.getSource(satelliteSourceId) == null) {
+                        val satelliteTileSet =
+                            TileSet(
+                                "2.2.0",
+                                "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            ).apply {
+                                scheme = "xyz"
+                                minZoom = 0f
+                                maxZoom = 23f
+                            }
+
+                        val satelliteSource =
+                            RasterSource(
+                                satelliteSourceId,
+                                satelliteTileSet,
+                                256
+                            )
+
+                        style.addSource(satelliteSource)
+
+                        val satelliteLayer =
+                            RasterLayer(
+                                satelliteLayerId,
+                                satelliteSourceId
+                            ).withProperties(
+                                PropertyFactory.visibility(
+                                    Property.NONE
+                                ),
+                                PropertyFactory.rasterOpacity(
+                                    1.0f
+                                ),
+                                PropertyFactory.rasterSaturation(
+                                    0.05f
+                                )
+                            )
+
+                        // La imagen satelital queda como capa de fondo.
+                        style.addLayer(satelliteLayer)
+
+                        if (style.getSource(satellitePointSourceId) == null) {
+                            style.addSource(
+                                GeoJsonSource(
+                                    satellitePointSourceId,
+                                    "{\"type\":\"FeatureCollection\",\"features\":[]}"
+                                )
+                            )
+
+                            if (style.getImage("lecturas_pin_pending") == null) {
+                                style.addImage(
+                                    "lecturas_pin_pending",
+                                    createDropPinBitmap(
+                                        Color.rgb(229, 57, 53)
+                                    )
+                                )
+                            }
+
+                            if (style.getImage("lecturas_pin_read") == null) {
+                                style.addImage(
+                                    "lecturas_pin_read",
+                                    createDropPinBitmap(
+                                        Color.rgb(34, 197, 94)
+                                    )
+                                )
+                            }
+
+                            if (style.getImage("lecturas_pin_focus") == null) {
+                                style.addImage(
+                                    "lecturas_pin_focus",
+                                    createDropPinBitmap(
+                                        Color.rgb(255, 214, 0),
+                                        selected = true
+                                    )
+                                )
+                            }
+
+                            val pendingLayer =
+                                SymbolLayer(
+                                    satellitePendingLayerId,
+                                    satellitePointSourceId
+                                ).withFilter(
+                                    Expression.all(
+                                        Expression.eq(
+                                            Expression.get("status"),
+                                            "pending"
+                                        ),
+                                        Expression.eq(
+                                            Expression.get("focused"),
+                                            false
+                                        )
+                                    )
+                                ).withProperties(
+                                    PropertyFactory.iconImage(
+                                        "lecturas_pin_pending"
+                                    ),
+                                    PropertyFactory.iconAnchor(
+                                        Property.ICON_ANCHOR_BOTTOM
+                                    ),
+                                    PropertyFactory.iconAllowOverlap(true),
+                                    PropertyFactory.iconIgnorePlacement(true),
+                                    PropertyFactory.iconSize(0.72f)
+                                )
+
+                            val readLayer =
+                                SymbolLayer(
+                                    satelliteReadLayerId,
+                                    satellitePointSourceId
+                                ).withFilter(
+                                    Expression.all(
+                                        Expression.eq(
+                                            Expression.get("status"),
+                                            "read"
+                                        ),
+                                        Expression.eq(
+                                            Expression.get("focused"),
+                                            false
+                                        )
+                                    )
+                                ).withProperties(
+                                    PropertyFactory.iconImage(
+                                        "lecturas_pin_read"
+                                    ),
+                                    PropertyFactory.iconAnchor(
+                                        Property.ICON_ANCHOR_BOTTOM
+                                    ),
+                                    PropertyFactory.iconAllowOverlap(true),
+                                    PropertyFactory.iconIgnorePlacement(true),
+                                    PropertyFactory.iconSize(0.72f)
+                                )
+
+                            val focusLayer =
+                                SymbolLayer(
+                                    satelliteFocusLayerId,
+                                    satellitePointSourceId
+                                ).withFilter(
+                                    Expression.eq(
+                                        Expression.get("focused"),
+                                        true
+                                    )
+                                ).withProperties(
+                                    PropertyFactory.iconImage(
+                                        "lecturas_pin_focus"
+                                    ),
+                                    PropertyFactory.iconAnchor(
+                                        Property.ICON_ANCHOR_BOTTOM
+                                    ),
+                                    PropertyFactory.iconAllowOverlap(true),
+                                    PropertyFactory.iconIgnorePlacement(true),
+                                    PropertyFactory.iconSize(0.84f)
+                                )
+
+                            style.addLayer(pendingLayer)
+                            style.addLayer(readLayer)
+                            style.addLayer(focusLayer)
+                        }
+                    }
 
                     val locationComponentOptions =
                         LocationComponentOptions
@@ -328,12 +718,26 @@ fun MapScreen(
 
     fun nudgeLocation(deltaLat: Double, deltaLon: Double) {
         val current = editingLocation ?: return
+
         val updated = LatLng(
             current.latitude + deltaLat,
             current.longitude + deltaLon
         )
+
         editingLocation = updated
         selectedMarker?.position = updated
+
+        if (selectedMarker == null) {
+            refreshSatellitePointsOnMap(
+                mapInstance = mapInstance,
+                satellitePointSourceId = satellitePointSourceId,
+                routePoints = routePoints,
+                records = records,
+                focusRecordRowNumber = focusRecordRowNumber,
+                temporaryRowNumber = selectedMapPoint?.recordRowNumber,
+                temporaryLocation = updated
+            )
+        }
     }
 
     LaunchedEffect(
@@ -341,24 +745,42 @@ fun MapScreen(
         mapStyleReady,
         routePoints,
         records,
-        focusRecordRowNumber
+        focusRecordRowNumber,
+        satelliteEnabled
     ) {
         val map = mapInstance ?: return@LaunchedEffect
-        if (!mapStyleReady) return@LaunchedEffect
+
+        if (!mapStyleReady) {
+            return@LaunchedEffect
+        }
+
+        refreshSatellitePointsOnMap(
+            mapInstance = mapInstance,
+            satellitePointSourceId = satellitePointSourceId,
+            routePoints = routePoints,
+            records = records,
+            focusRecordRowNumber = focusRecordRowNumber
+        )
 
         map.clear()
         markerRowNumbers.clear()
 
         map.setOnMarkerClickListener { marker ->
-            val rowNumber = markerRowNumbers[marker]
+
+            val rowNumber =
+                markerRowNumbers[marker]
 
             if (rowNumber != null) {
-                selectedMapPoint = routePoints.firstOrNull {
-                    it.recordRowNumber == rowNumber
-                }
+
+                selectedMapPoint =
+                    routePoints.firstOrNull {
+                        it.recordRowNumber == rowNumber
+                    }
+
                 selectedMarker = marker
                 pointSettingsOpen = false
                 editingLocation = null
+
                 true
             } else {
                 false
@@ -366,15 +788,24 @@ fun MapScreen(
         }
 
         routePoints.forEach { point ->
+
             val currentRecord =
                 records.firstOrNull {
                     it.rowNumber == point.recordRowNumber
                 }
 
-            val currentReading = currentRecord?.currentReading
+            val currentReading =
+                currentRecord?.currentReading
+
+            val isFocusedPoint =
+                focusRecordRowNumber != null &&
+                        point.recordRowNumber ==
+                        focusRecordRowNumber
 
             val markerIcon =
-                if (currentReading != null) {
+                if (isFocusedPoint) {
+                    focusMarkerIcon
+                } else if (currentReading != null) {
                     greenMarkerIcon
                 } else {
                     redMarkerIcon
@@ -390,7 +821,11 @@ fun MapScreen(
                             )
                         )
                         .title(
-                            "Medidor ${point.meter}"
+                            if (isFocusedPoint) {
+                                "📍 MEDIDOR SELECCIONADO: ${point.meter}"
+                            } else {
+                                "Medidor ${point.meter}"
+                            }
                         )
                         .snippet(
                             "Usuario: ${point.user}\n" +
@@ -401,17 +836,20 @@ fun MapScreen(
                         .icon(markerIcon)
                 )
 
-            markerRowNumbers[marker] = point.recordRowNumber
+            markerRowNumbers[marker] =
+                point.recordRowNumber
         }
 
         val focusPoint =
             focusRecordRowNumber?.let { rowNumber ->
+
                 routePoints.firstOrNull {
                     it.recordRowNumber == rowNumber
                 }
             }
 
-        if (focusPoint != null && map.locationComponent.isLocationComponentEnabled) {
+        if (focusPoint != null) {
+
             val target =
                 LatLng(
                     focusPoint.latitude,
@@ -427,7 +865,9 @@ fun MapScreen(
                     CameraPosition.Builder()
                         .target(target)
                         .zoom(18.0)
-                        .bearing(map.cameraPosition.bearing)
+                        .bearing(
+                            map.cameraPosition.bearing
+                        )
                         .build()
                 ),
                 700
@@ -435,7 +875,126 @@ fun MapScreen(
         }
     }
 
+    LaunchedEffect(
+        mapInstance,
+        mapStyleReady,
+        satelliteEnabled
+    ) {
+        val map = mapInstance ?: return@LaunchedEffect
+
+        if (!mapStyleReady) {
+            return@LaunchedEffect
+        }
+
+        val style = map.style ?: return@LaunchedEffect
+
+        val satelliteLayer =
+            style.getLayer("lecturas_satellite_layer")
+                ?: return@LaunchedEffect
+
+        satelliteLayer.setProperties(
+            PropertyFactory.visibility(
+                if (satelliteEnabled) {
+                    Property.VISIBLE
+                } else {
+                    Property.NONE
+                }
+            )
+        )
+
+        val pointVisibility =
+            if (satelliteEnabled) {
+                Property.VISIBLE
+            } else {
+                Property.NONE
+            }
+
+        listOf(
+            satellitePendingLayerId,
+            satelliteReadLayerId,
+            satelliteFocusLayerId
+        ).forEach { layerId ->
+            style.getLayer(layerId)?.setProperties(
+                PropertyFactory.visibility(
+                    pointVisibility
+                )
+            )
+        }
+
+        refreshSatellitePointsOnMap(
+            mapInstance = mapInstance,
+            satellitePointSourceId = satellitePointSourceId,
+            routePoints = routePoints,
+            records = records,
+            focusRecordRowNumber = focusRecordRowNumber
+        )
+    }
+
+    DisposableEffect(
+        mapInstance,
+        mapStyleReady,
+        satelliteEnabled,
+        routePoints,
+        records,
+        focusRecordRowNumber
+    ) {
+        val map = mapInstance
+
+        if (map == null || !mapStyleReady || !satelliteEnabled) {
+            onDispose { }
+        } else {
+            val listener =
+                MapLibreMap.OnMapClickListener { point ->
+                    val screenPoint =
+                        map.projection.toScreenLocation(point)
+
+                    val selected =
+                        routePoints
+                            .map { routePoint ->
+                                val routeScreenPoint =
+                                    map.projection.toScreenLocation(
+                                        LatLng(
+                                            routePoint.latitude,
+                                            routePoint.longitude
+                                        )
+                                    )
+
+                                val dx =
+                                    routeScreenPoint.x - screenPoint.x
+
+                                val dy =
+                                    routeScreenPoint.y - screenPoint.y
+
+                                val distanceSquared =
+                                    dx * dx + dy * dy
+
+                                routePoint to distanceSquared
+                            }
+                            .minByOrNull { it.second }
+                            ?.takeIf { it.second <= 45f * 45f }
+                            ?.first
+
+                    if (selected != null) {
+                        selectedMapPoint = selected
+                        selectedMarker = null
+                        pointSettingsOpen = false
+                        editingLocation = null
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+            map.addOnMapClickListener(listener)
+
+            onDispose {
+                map.removeOnMapClickListener(listener)
+            }
+        }
+    }
+
     val mapContainer = remember(mapView) {
+
         FrameLayout(context).apply {
 
             addView(
@@ -446,29 +1005,187 @@ fun MapScreen(
                 )
             )
 
+            fun createGlassBackground(
+                cornerRadiusDp: Float = 16f,
+                color: Int = Color.argb(222, 255, 255, 255)
+            ): GradientDrawable {
+                val density = context.resources.displayMetrics.density
+                return GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = cornerRadiusDp * density
+                    setColor(color)
+                    setStroke(
+                        (1 * density).toInt(),
+                        Color.argb(90, 255, 255, 255)
+                    )
+                }
+            }
+
+            fun createGlassButton(
+                text: String,
+                textSize: Float,
+                contentDescription: String
+            ): TextView {
+                return TextView(context).apply {
+                    this.text = text
+                    this.textSize = textSize
+                    setTextColor(Color.rgb(28, 36, 46))
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    this.contentDescription = contentDescription
+                    background = createGlassBackground(
+                        cornerRadiusDp = 15f
+                    )
+                    elevation =
+                        5 * context.resources.displayMetrics.density
+                    isClickable = true
+                    isFocusable = true
+                }
+            }
+
+            val zoomPlus =
+                createGlassButton(
+                    "+",
+                    23f,
+                    "Acercar mapa"
+                )
+
+            val zoomMinus =
+                createGlassButton(
+                    "−",
+                    23f,
+                    "Alejar mapa"
+                )
+
+            zoomPlus.setOnClickListener {
+                val map = mapInstance ?: return@setOnClickListener
+                map.animateCamera(
+                    CameraUpdateFactory.zoomIn(),
+                    220
+                )
+            }
+
+            zoomMinus.setOnClickListener {
+                val map = mapInstance ?: return@setOnClickListener
+                map.animateCamera(
+                    CameraUpdateFactory.zoomOut(),
+                    220
+                )
+            }
+
+            val satelliteAttribution =
+                createGlassButton(
+                    "© Esri",
+                    10f,
+                    "Atribución de imágenes satelitales"
+                ).apply {
+                    setPadding(
+                        8,
+                        3,
+                        8,
+                        3
+                    )
+                }
+
+            val satelliteButton =
+                createGlassButton(
+                    if (satelliteEnabled) "MAP" else "SAT",
+                    13f,
+                    "Cambiar entre mapa y satélite"
+                ).apply {
+                    minWidth =
+                        (62 * context.resources.displayMetrics.density)
+                            .toInt()
+                    minHeight =
+                        (44 * context.resources.displayMetrics.density)
+                            .toInt()
+                }
+
+            fun updateSatelliteButtonAppearance() {
+                satelliteButton.text =
+                    if (satelliteEnabled) "MAP" else "SAT"
+
+                satelliteButton.setTextColor(
+                    if (satelliteEnabled) {
+                        Color.WHITE
+                    } else {
+                        Color.rgb(28, 36, 46)
+                    }
+                )
+
+                satelliteButton.background =
+                    createGlassBackground(
+                        cornerRadiusDp = 15f,
+                        color =
+                            if (satelliteEnabled) {
+                                Color.argb(220, 30, 41, 59)
+                            } else {
+                                Color.argb(222, 255, 255, 255)
+                            }
+                    )
+            }
+
+            satelliteButton.setOnClickListener {
+                satelliteEnabled = !satelliteEnabled
+
+                // El mapa vectorial admite un acercamiento mayor.
+                // En satélite limitamos el zoom al nivel donde la cobertura
+                // de World Imagery es más consistente para evitar el mensaje
+                // de datos no disponibles.
+                mapInstance?.setMaxZoomPreference(
+                    if (satelliteEnabled) 19.0 else 22.0
+                )
+
+                updateSatelliteButtonAppearance()
+
+                satelliteAttribution.visibility =
+                    if (satelliteEnabled) {
+                        android.view.View.VISIBLE
+                    } else {
+                        android.view.View.GONE
+                    }
+            }
+
+            updateSatelliteButtonAppearance()
+            satelliteAttribution.visibility =
+                if (satelliteEnabled) {
+                    android.view.View.VISIBLE
+                } else {
+                    android.view.View.GONE
+                }
+
             val centerButton =
                 ImageButton(context).apply {
-
                     background =
                         GradientDrawable().apply {
-                            shape =
-                                GradientDrawable.OVAL
-
-                            setColor(Color.WHITE)
+                            shape = GradientDrawable.OVAL
+                            setColor(
+                                Color.argb(
+                                    222,
+                                    255,
+                                    255,
+                                    255
+                                )
+                            )
+                            setStroke(
+                                (
+                                        1 * context.resources
+                                            .displayMetrics.density
+                                        ).toInt(),
+                                Color.argb(90, 255, 255, 255)
+                            )
                         }
 
                     setImageResource(
                         android.R.drawable.ic_menu_mylocation
                     )
 
-                    scaleType =
-                        ImageView.ScaleType.CENTER
-
-                    contentDescription =
-                        "Centrar ubicación"
+                    scaleType = ImageView.ScaleType.CENTER
+                    contentDescription = "Centrar ubicación"
+                    elevation =
+                        5 * context.resources.displayMetrics.density
 
                     setOnClickListener {
-
                         if (!mapStyleReady) {
                             return@setOnClickListener
                         }
@@ -477,8 +1194,7 @@ fun MapScreen(
                             mapInstance
                                 ?: return@setOnClickListener
 
-                        val component =
-                            map.locationComponent
+                        val component = map.locationComponent
 
                         if (!component.isLocationComponentEnabled) {
                             return@setOnClickListener
@@ -521,22 +1237,83 @@ fun MapScreen(
                     }
                 }
 
-            val buttonSize =
-                (56 * context.resources.displayMetrics.density)
-                    .toInt()
+            val density =
+                context.resources.displayMetrics.density
+
+            val smallButtonSize =
+                (48 * density).toInt()
+
+            val centerButtonSize =
+                (52 * density).toInt()
 
             val margin =
-                (16 * context.resources.displayMetrics.density)
-                    .toInt()
+                (14 * density).toInt()
 
-            val buttonParams =
+            val gap =
+                (8 * density).toInt()
+
+            val zoomPlusParams =
                 FrameLayout.LayoutParams(
-                    buttonSize,
-                    buttonSize
+                    smallButtonSize,
+                    smallButtonSize
                 ).apply {
-                    gravity =
-                        Gravity.END or Gravity.BOTTOM
+                    gravity = Gravity.END or Gravity.BOTTOM
+                    setMargins(
+                        margin,
+                        margin,
+                        margin,
+                        margin + centerButtonSize + gap
+                    )
+                }
 
+            val zoomMinusParams =
+                FrameLayout.LayoutParams(
+                    smallButtonSize,
+                    smallButtonSize
+                ).apply {
+                    gravity = Gravity.END or Gravity.BOTTOM
+                    setMargins(
+                        margin,
+                        margin,
+                        margin,
+                        margin + centerButtonSize + gap + smallButtonSize + gap
+                    )
+                }
+
+            val centerButtonParams =
+                FrameLayout.LayoutParams(
+                    centerButtonSize,
+                    centerButtonSize
+                ).apply {
+                    gravity = Gravity.END or Gravity.BOTTOM
+                    setMargins(
+                        margin,
+                        margin,
+                        margin,
+                        margin
+                    )
+                }
+
+            val satelliteButtonParams =
+                FrameLayout.LayoutParams(
+                    (62 * density).toInt(),
+                    (44 * density).toInt()
+                ).apply {
+                    gravity = Gravity.END or Gravity.TOP
+                    setMargins(
+                        margin,
+                        margin,
+                        margin,
+                        margin
+                    )
+                }
+
+            val satelliteAttributionParams =
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    (28 * density).toInt()
+                ).apply {
+                    gravity = Gravity.START or Gravity.BOTTOM
                     setMargins(
                         margin,
                         margin,
@@ -546,15 +1323,41 @@ fun MapScreen(
                 }
 
             addView(
+                satelliteButton,
+                satelliteButtonParams
+            )
+
+            addView(
+                satelliteAttribution,
+                satelliteAttributionParams
+            )
+
+            addView(
+                zoomPlus,
+                zoomPlusParams
+            )
+
+            addView(
+                zoomMinus,
+                zoomMinusParams
+            )
+
+            addView(
                 centerButton,
-                buttonParams
+                centerButtonParams
             )
         }
     }
 
-    DisposableEffect(lifecycleOwner, mapView) {
+    DisposableEffect(
+        lifecycleOwner,
+        mapView
+    ) {
+
         val observer =
-            androidx.lifecycle.LifecycleEventObserver { _, event ->
+            androidx.lifecycle.LifecycleEventObserver {
+                    _,
+                    event ->
 
                 when (event) {
 
@@ -578,7 +1381,9 @@ fun MapScreen(
                 }
             }
 
-        lifecycleOwner.lifecycle.addObserver(observer)
+        lifecycleOwner.lifecycle.addObserver(
+            observer
+        )
 
         onDispose {
 
@@ -588,8 +1393,13 @@ fun MapScreen(
             val callback =
                 bearingCallback
 
-            if (engine != null && callback != null) {
-                engine.removeLocationUpdates(callback)
+            if (
+                engine != null &&
+                callback != null
+            ) {
+                engine.removeLocationUpdates(
+                    callback
+                )
             }
 
             lifecycleOwner.lifecycle.removeObserver(
@@ -603,6 +1413,7 @@ fun MapScreen(
     Box(
         modifier = modifier
     ) {
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
@@ -610,7 +1421,30 @@ fun MapScreen(
             }
         )
 
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .clickable {
+                    onBackToReadings()
+                },
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.86f),
+            shadowElevation = 4.dp
+        ) {
+            Text(
+                text = "‹",
+                modifier = Modifier.padding(
+                    horizontal = 15.dp,
+                    vertical = 5.dp
+                ),
+                fontSize = 30.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Light
+            )
+        }
+
         selectedMapPoint?.let { point ->
+
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -618,141 +1452,248 @@ fun MapScreen(
                     .padding(16.dp),
                 colors = CardDefaults.cardColors()
             ) {
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement =
+                        Arrangement.spacedBy(4.dp)
                 ) {
+
                     Text(
-                        text = "Medidor ${point.meter}",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                        text =
+                            "Medidor ${point.meter}",
+                        style =
+                            androidx.compose.material3
+                                .MaterialTheme
+                                .typography
+                                .titleLarge
                     )
 
-                    Text("Usuario: ${point.user}")
-                    Text("Dirección: ${point.address}")
-                    Text("Barrio: ${point.neighborhood}")
+                    Text(
+                        "Usuario: ${point.user}"
+                    )
+
+                    Text(
+                        "Dirección: ${point.address}"
+                    )
+
+                    Text(
+                        "Barrio: ${point.neighborhood}"
+                    )
 
                     val currentRecord =
                         records.firstOrNull {
-                            it.rowNumber == point.recordRowNumber
+                            it.rowNumber ==
+                                    point.recordRowNumber
                         }
 
                     Text(
-                        "Lectura: ${currentRecord?.currentReading ?: "Pendiente"}"
+                        "Lectura: ${
+                            currentRecord?.currentReading
+                                ?: "Pendiente"
+                        }"
                     )
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(
+                        Modifier.height(8.dp)
+                    )
 
                     Button(
                         onClick = {
-                            onMarkerClick(point.recordRowNumber)
+                            onMarkerClick(
+                                point.recordRowNumber
+                            )
+
                             selectedMapPoint = null
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier =
+                            Modifier.fillMaxWidth()
                     ) {
-                        Text("Registrar lectura")
+                        Text(
+                            "Registrar lectura"
+                        )
                     }
 
                     OutlinedButton(
                         onClick = {
                             pointSettingsOpen = true
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier =
+                            Modifier.fillMaxWidth()
                     ) {
-                        Text("⚙ Configurar punto")
+                        Text(
+                            "⚙ Configurar punto"
+                        )
                     }
 
                     if (pointSettingsOpen) {
-                        Spacer(Modifier.height(4.dp))
+
+                        Spacer(
+                            Modifier.height(4.dp)
+                        )
 
                         Text(
                             "Configuración de ubicación",
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                            style =
+                                androidx.compose.material3
+                                    .MaterialTheme
+                                    .typography
+                                    .titleMedium
                         )
 
                         Button(
-                            onClick = { startLocationAdjustment() },
-                            modifier = Modifier.fillMaxWidth()
+                            onClick = {
+                                startLocationAdjustment()
+                            },
+                            modifier =
+                                Modifier.fillMaxWidth()
                         ) {
-                            Text("Ajustar ubicación")
+                            Text(
+                                "Ajustar ubicación"
+                            )
                         }
 
                         OutlinedButton(
-                            onClick = { confirmDelete = true },
-                            modifier = Modifier.fillMaxWidth()
+                            onClick = {
+                                confirmDelete = true
+                            },
+                            modifier =
+                                Modifier.fillMaxWidth()
                         ) {
-                            Text("Eliminar ubicación")
+                            Text(
+                                "Eliminar ubicación"
+                            )
                         }
                     }
 
                     if (editingLocation != null) {
-                        Spacer(Modifier.height(4.dp))
 
-                        Text("Ajuste fino de ubicación")
+                        Spacer(
+                            Modifier.height(4.dp)
+                        )
+
+                        Text(
+                            "Ajuste fino de ubicación"
+                        )
+
                         Text(
                             "Usa las flechas para mover el punto una pequeña distancia y luego guarda el ajuste."
                         )
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
+                            modifier =
+                                Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.Center
                         ) {
+
                             Button(
-                                onClick = { nudgeLocation(0.000001, 0.0) }
+                                onClick = {
+                                    nudgeLocation(
+                                        0.000001,
+                                        0.0
+                                    )
+                                }
                             ) {
                                 Text("↑")
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            modifier =
+                                Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.SpaceEvenly
                         ) {
+
                             Button(
-                                onClick = { nudgeLocation(0.0, -0.000001) }
+                                onClick = {
+                                    nudgeLocation(
+                                        0.0,
+                                        -0.000001
+                                    )
+                                }
                             ) {
                                 Text("←")
                             }
 
                             Button(
-                                onClick = { nudgeLocation(0.0, 0.000001) }
+                                onClick = {
+                                    nudgeLocation(
+                                        0.0,
+                                        0.000001
+                                    )
+                                }
                             ) {
                                 Text("→")
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
+                            modifier =
+                                Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.Center
                         ) {
+
                             Button(
-                                onClick = { nudgeLocation(-0.000001, 0.0) }
+                                onClick = {
+                                    nudgeLocation(
+                                        -0.000001,
+                                        0.0
+                                    )
+                                }
                             ) {
                                 Text("↓")
                             }
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier =
+                                Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.spacedBy(8.dp)
                         ) {
+
                             Button(
-                                onClick = { confirmMove = true },
-                                modifier = Modifier.weight(1f)
+                                onClick = {
+                                    confirmMove = true
+                                },
+                                modifier =
+                                    Modifier.weight(1f)
                             ) {
-                                Text("Guardar")
+                                Text(
+                                    "Guardar"
+                                )
                             }
 
                             OutlinedButton(
                                 onClick = {
+
                                     selectedMarker?.position =
-                                        LatLng(point.latitude, point.longitude)
+                                        LatLng(
+                                            point.latitude,
+                                            point.longitude
+                                        )
+
+                                    refreshSatellitePointsOnMap(
+                                        mapInstance = mapInstance,
+                                        satellitePointSourceId = satellitePointSourceId,
+                                        routePoints = routePoints,
+                                        records = records,
+                                        focusRecordRowNumber = focusRecordRowNumber
+                                    )
+
                                     editingLocation = null
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier =
+                                    Modifier.weight(1f)
                             ) {
-                                Text("Cancelar")
+                                Text(
+                                    "Cancelar"
+                                )
                             }
                         }
                     }
@@ -761,74 +1702,127 @@ fun MapScreen(
         }
 
         if (confirmDelete) {
+
             AlertDialog(
-                onDismissRequest = { confirmDelete = false },
-                title = { Text("Eliminar ubicación") },
+                onDismissRequest = {
+                    confirmDelete = false
+                },
+
+                title = {
+                    Text(
+                        "Eliminar ubicación"
+                    )
+                },
+
                 text = {
                     Text(
                         "¿Confirmas que quieres eliminar la ubicación GPS de este medidor? La lectura y los datos del medidor no se eliminarán."
                     )
                 },
+
                 confirmButton = {
+
                     Button(
                         onClick = {
+
                             selectedMapPoint?.let {
-                                vm.deleteRoutePoint(it.recordRowNumber)
+                                vm.deleteRoutePoint(
+                                    it.recordRowNumber
+                                )
                             }
+
                             confirmDelete = false
                             pointSettingsOpen = false
                             selectedMarker = null
                             selectedMapPoint = null
                         }
                     ) {
-                        Text("Eliminar")
+                        Text(
+                            "Eliminar"
+                        )
                     }
                 },
+
                 dismissButton = {
+
                     OutlinedButton(
-                        onClick = { confirmDelete = false }
+                        onClick = {
+                            confirmDelete = false
+                        }
                     ) {
-                        Text("Cancelar")
+                        Text(
+                            "Cancelar"
+                        )
                     }
                 }
             )
         }
 
         if (confirmMove) {
+
             AlertDialog(
-                onDismissRequest = { confirmMove = false },
-                title = { Text("Guardar nueva ubicación") },
-                text = {
-                    Text("¿Confirmas que quieres guardar la nueva posición de este punto?")
+                onDismissRequest = {
+                    confirmMove = false
                 },
+
+                title = {
+                    Text(
+                        "Guardar nueva ubicación"
+                    )
+                },
+
+                text = {
+                    Text(
+                        "¿Confirmas que quieres guardar la nueva posición de este punto?"
+                    )
+                },
+
                 confirmButton = {
+
                     Button(
                         onClick = {
-                            val point = selectedMapPoint
-                            val location = editingLocation
-                            if (point != null && location != null) {
+
+                            val point =
+                                selectedMapPoint
+
+                            val location =
+                                editingLocation
+
+                            if (
+                                point != null &&
+                                location != null
+                            ) {
+
                                 vm.updateRoutePointLocation(
                                     point.recordRowNumber,
                                     location.latitude,
                                     location.longitude
                                 )
                             }
+
                             confirmMove = false
                             editingLocation = null
                         }
                     ) {
-                        Text("Guardar")
+                        Text(
+                            "Guardar"
+                        )
                     }
                 },
+
                 dismissButton = {
+
                     OutlinedButton(
-                        onClick = { confirmMove = false }
+                        onClick = {
+                            confirmMove = false
+                        }
                     ) {
-                        Text("Cancelar")
+                        Text(
+                            "Cancelar"
+                        )
                     }
                 }
             )
         }
     }
 }
-

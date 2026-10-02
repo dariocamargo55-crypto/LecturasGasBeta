@@ -643,100 +643,123 @@ object ExcelReader {
                     RegexOption.DOT_MATCHES_ALL
                 )
 
-            xml =
-                rowRegex.replace(
+            val rowMatch =
+                rowRegex.find(
                     xml
-                ) { match ->
+                )
+                    ?: continue
 
-                    val body =
-                        match.groupValues[2]
+            val body =
+                rowMatch.groupValues[2]
 
-                    /*
-                     * Busca la celda D$row tanto si está
-                     * escrita como:
-                     *
-                     * <c ...></c>
-                     *
-                     * como si está autocerrada:
-                     *
-                     * <c .../>
-                     */
-                    val cellRegex =
+            val cellRegex =
+                Regex(
+                    """<c\b[^>]*?\br="D$row"[^>]*?(?:/>|>.*?</c>)""",
+                    RegexOption.DOT_MATCHES_ALL
+                )
+
+            val cellMatch =
+                cellRegex.find(
+                    body
+                )
+
+            if (cellMatch == null) {
+                continue
+            }
+
+            val originalCell =
+                cellMatch.value
+
+            val originalValue =
+                Regex(
+                    """<v>(.*?)</v>""",
+                    RegexOption.DOT_MATCHES_ALL
+                )
+                    .find(
+                        originalCell
+                    )
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.trim()
+
+            val originalReading =
+                originalValue?.let {
+                    runCatching {
+                        java.math.BigDecimal(
+                            it
+                        ).toLong()
+                    }.getOrNull()
+                }
+
+            /*
+             * Si la lectura que tiene la aplicación es
+             * exactamente la misma que ya estaba en el
+             * Excel original, no tocamos absolutamente
+             * nada de esa celda.
+             *
+             * Esto evita reconstruir lecturas que ya
+             * existían y conserva su representación,
+             * formato y XML original.
+             */
+            if (
+                originalReading == reading
+            ) {
+                continue
+            }
+
+            val newCell =
+                if (
+                    originalCell.contains(
+                        "<v>"
+                    )
+                ) {
+                    val valueMatch =
                         Regex(
-                            """<c\b[^>]*\br="D$row"[^>]*(?:/>|>.*?</c>)""",
+                            """<v>.*?</v>""",
                             RegexOption.DOT_MATCHES_ALL
+                        ).find(
+                            originalCell
                         )
 
-                    val newBody =
-                        if (
-                            cellRegex.containsMatchIn(
-                                body
-                            )
-                        ) {
-                            cellRegex.replace(
-                                body
-                            ) { oldCell ->
-
-                                val openingTag =
-                                    Regex(
-                                        """<c\b[^>]*>"""
-                                    )
-                                        .find(
-                                            oldCell.value
-                                        )
-                                        ?.value
-                                        ?: """<c r="D$row">"""
-
-                                val normalizedOpeningTag =
-                                    openingTag
-                                        .removeSuffix(">")
-                                        .removeSuffix("/")
-                                        .plus(">")
-
-                                normalizedOpeningTag +
-                                        "<v>$reading</v></c>"
-                            }
-                        } else {
-
-                            /*
-                             * Si D$row no existe, intentamos
-                             * insertar la celda después de C$row.
-                             *
-                             * También aceptamos C$row
-                             * autocerrada.
-                             */
-                            val cCell =
-                                Regex(
-                                    """<c\b[^>]*\br="C$row"[^>]*(?:/>|>.*?</c>)""",
-                                    RegexOption.DOT_MATCHES_ALL
-                                )
-                                    .find(body)
-
-                            val newCell =
-                                """<c r="D$row"><v>$reading</v></c>"""
-
-                            if (cCell != null) {
-                                val insertAt =
-                                    cCell.range.last + 1
-
-                                body.substring(
-                                    0,
-                                    insertAt
-                                ) +
-                                        newCell +
-                                        body.substring(
-                                            insertAt
-                                        )
-                            } else {
-                                body +
-                                        newCell
-                            }
-                        }
-
-                    match.groupValues[1] +
-                            newBody +
-                            match.groupValues[3]
+                    if (valueMatch != null) {
+                        originalCell.replaceRange(
+                            valueMatch.range,
+                            "<v>$reading</v>"
+                        )
+                    } else {
+                        originalCell
+                    }
+                } else if (
+                    originalCell.endsWith(
+                        "/>"
+                    )
+                ) {
+                    originalCell
+                        .removeSuffix(
+                            "/>"
+                        ) +
+                            "><v>$reading</v></c>"
+                } else {
+                    originalCell
+                        .replace(
+                            "</c>",
+                            "<v>$reading</v></c>"
+                        )
                 }
+
+            val newBody =
+                body.replaceRange(
+                    cellMatch.range,
+                    newCell
+                )
+
+            xml =
+                xml.replaceRange(
+                    rowMatch.range,
+                    rowMatch.groupValues[1] +
+                            newBody +
+                            rowMatch.groupValues[3]
+                )
         }
 
         return xml.toByteArray(

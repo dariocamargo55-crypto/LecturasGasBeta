@@ -493,6 +493,10 @@ fun App(
                             showMap = false
                             mapFocusRowNumber = null
                         }
+                    },
+                    onBackToReadings = {
+                        showMap = false
+                        mapFocusRowNumber = null
                     }
                 )
             } else {
@@ -997,7 +1001,6 @@ fun App(
 
                                         expanded =
                                             isExpanded,
-
                                         onClick = {
 
                                             if (isSearchComparison) {
