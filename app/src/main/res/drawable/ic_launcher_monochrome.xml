@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Versión de un solo color (iconos temáticos de Android 13+). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="20"
+        android:scaleX="0.86"
+        android:scaleY="0.86"
+        android:translateY="3">
+        <path
+            android:fillColor="#000000"
+            android:fillType="evenOdd"
+            android:pathData="M54,20 C44.8,20 37.5,27.3 37.5,36.5 C37.5,48.8 54,65 54,65 C54,65 70.5,48.8 70.5,36.5 C70.5,27.3 63.2,20 54,20 Z M54,26 C54,26 62,32.5 62,39.5 C62,44.5 58.5,48 54,48 C49.5,48 46,44.5 46,39.5 C46,36.5 47.6,34.2 49.4,32.4 C49.7,34.7 50.9,36 52.4,36.6 C51.9,32.3 52.9,29 54,26 Z" />
+    </group>
+
+    <group
+        android:pivotX="54"
+        android:pivotY="86"
+        android:scaleX="0.85"
+        android:scaleY="0.85"
+        android:translateY="-4">
+        <path
+            android:pathData="M37,86 A17,17 0 0 1 71,86"
+            android:strokeColor="#000000"
+            android:strokeWidth="4.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M54,85 L61.5,74.5"
+            android:strokeColor="#000000"
+            android:strokeWidth="3.4"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#000000"
+            android:pathData="M54,81.4 A3.6,3.6 0 1 1 54,88.6 A3.6,3.6 0 1 1 54,81.4 Z" />
+    </group>
+</vector>

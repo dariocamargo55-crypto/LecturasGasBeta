@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pin de ubicación con llama (gas) y medidor con aguja: lo que hace la app. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="20"
+        android:scaleX="0.86"
+        android:scaleY="0.86"
+        android:translateY="3">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,20 C44.8,20 37.5,27.3 37.5,36.5 C37.5,48.8 54,65 54,65 C54,65 70.5,48.8 70.5,36.5 C70.5,27.3 63.2,20 54,20 Z" />
+        <path android:pathData="M54,26 C54,26 62,32.5 62,39.5 C62,44.5 58.5,48 54,48 C49.5,48 46,44.5 46,39.5 C46,36.5 47.6,34.2 49.4,32.4 C49.7,34.7 50.9,36 52.4,36.6 C51.9,32.3 52.9,29 54,26 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="54"
+                    android:startY="26"
+                    android:endX="54"
+                    android:endY="52"
+                    android:type="linear">
+                    <item android:color="#FFB547" android:offset="0.0" />
+                    <item android:color="#F26B1D" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:fillColor="#FFE2B8"
+            android:pathData="M54,38.5 C54,38.5 57.2,41 57.2,43.6 C57.2,45.6 55.8,47 54,47 C52.2,47 50.8,45.6 50.8,43.6 C50.8,42.3 51.6,41.3 52.4,40.5 C52.7,41.6 53.3,42 54,42.1 Z" />
+    </group>
+
+    <group
+        android:pivotX="54"
+        android:pivotY="86"
+        android:scaleX="0.85"
+        android:scaleY="0.85"
+        android:translateY="-4">
+        <path
+            android:pathData="M37,86 A17,17 0 0 1 71,86"
+            android:strokeColor="#73FFFFFF"
+            android:strokeWidth="4.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M37,86 A17,17 0 0 1 49.4,69.7"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="4.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M54,85 L61.5,74.5"
+            android:strokeColor="#FFB547"
+            android:strokeWidth="3.4"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,81.4 A3.6,3.6 0 1 1 54,88.6 A3.6,3.6 0 1 1 54,81.4 Z" />
+        <path
+            android:fillColor="#F26B1D"
+            android:pathData="M54,83.5 A1.5,1.5 0 1 1 54,86.5 A1.5,1.5 0 1 1 54,83.5 Z" />
+    </group>
+</vector>
